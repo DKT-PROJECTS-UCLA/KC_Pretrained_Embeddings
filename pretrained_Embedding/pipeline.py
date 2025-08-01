@@ -137,24 +137,50 @@ class EmbeddingPipeline:
                     )
                 stage_outputs["kc"] = kc_vecs
 
+            # elif stage == "sa":
+            #     # Decide whether we base SA on questions or KCs
+            #     base_vectors = (
+            #         stage_outputs.get("question")
+            #         if "question" in stage_outputs
+            #         else stage_outputs.get("kc")
+            #     )
+            #     if base_vectors is None:
+            #         raise RuntimeError(
+            #             "SA stage could not find base embeddings (question/kc)."
+            #         )
+
+            #     sa_vecs = {}
+            #     for qid, base_vec in base_vectors.items():
+            #         sa_vecs[(qid, True)] = self._sa_fn(base_vec, True, **self.cfg.sa_kwargs)
+            #         sa_vecs[(qid, False)] = self._sa_fn(base_vec, False, **self.cfg.sa_kwargs)
+            #     stage_outputs["sa"] = sa_vecs
+            
             elif stage == "sa":
-                # Decide whether we base SA on questions or KCs
-                base_vectors = (
-                    stage_outputs.get("question")
-                    if "question" in stage_outputs
-                    else stage_outputs.get("kc")
-                )
-                if base_vectors is None:
+                # SA embeddings are always created for questions, not KCs
+                # So we need to determine which base embeddings to use
+                if "question" in stage_outputs:
+                    # Use question embeddings as base
+                    base_vectors = stage_outputs["question"]
+                    sa_vecs = {}
+                    for qid, base_vec in base_vectors.items():
+                        sa_vecs[(qid, True)] = self._sa_fn(base_vec, True, **self.cfg.sa_kwargs)
+                        sa_vecs[(qid, False)] = self._sa_fn(base_vec, False, **self.cfg.sa_kwargs)
+                elif "kc" in stage_outputs:
+                    # Use KC embeddings as base, but still create SA embeddings for each question
+                    kc_vectors = stage_outputs["kc"]
+                    sa_vecs = {}
+                    for qid, kc_id in qid_to_kc.items():
+                        if kc_id in kc_vectors:
+                            base_vec = kc_vectors[kc_id]
+                            sa_vecs[(qid, True)] = self._sa_fn(base_vec, True, **self.cfg.sa_kwargs)
+                            sa_vecs[(qid, False)] = self._sa_fn(base_vec, False, **self.cfg.sa_kwargs)
+                    
+                else:
                     raise RuntimeError(
                         "SA stage could not find base embeddings (question/kc)."
                     )
-
-                sa_vecs = {}
-                for qid, base_vec in base_vectors.items():
-                    sa_vecs[(qid, True)] = self._sa_fn(base_vec, True, **self.cfg.sa_kwargs)
-                    sa_vecs[(qid, False)] = self._sa_fn(base_vec, False, **self.cfg.sa_kwargs)
+                
                 stage_outputs["sa"] = sa_vecs
-
             else:  # pragma: no cover
                 raise AssertionError(f"Unknown stage '{stage}' encountered.")
 
