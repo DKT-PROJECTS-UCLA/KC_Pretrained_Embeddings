@@ -9,6 +9,7 @@ import os
 import pickle
 import logging
 from pathlib import Path
+from typing import Dict, Tuple 
 
 import pandas as pd
 import torch
@@ -26,14 +27,68 @@ logger = logging.getLogger(__name__)
 # STEP 1: SETUP - Prepare Your Data
 # =============================================================================
 
-def load_your_data():
+# def load_your_data():
+#     """
+#     Replace this function with your actual data loading logic.
+#     """
+#     # EXAMPLE - Replace with your actual data loading
+#     question_df = pd.DataFrame()
+#     qid_to_kc = pd.DataFrame()
+#     return question_df, qid_to_kc
+
+def load_your_data(data_dir: str = "./data", 
+                      format: str = "pickle") -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
-    Replace this function with your actual data loading logic.
+    Load question_df and qid_to_kc from files.
+    
+    Args:
+        data_dir: Directory containing the saved files
+        format: "pickle", "json", or "combined"
+        
+    Returns:
+        question_df, qid_to_kc
     """
-    # EXAMPLE - Replace with your actual data loading
-    question_df = pd.DataFrame()
-    qid_to_kc = pd.DataFrame()
+    # Load question_df from CSV
+    csv_path = os.path.join(data_dir, "question_df.csv")
+    if os.path.exists(csv_path):
+        question_df = pd.read_csv(csv_path)
+        print(f"Loaded question_df from {csv_path}")
+    else:
+        raise FileNotFoundError(f"Cannot find {csv_path}")
+    
+    # Load qid_to_kc based on format
+    if format == "pickle":
+        pickle_path = os.path.join(data_dir, "qid_to_kc.pkl")
+        if os.path.exists(pickle_path):
+            with open(pickle_path, 'rb') as f:
+                qid_to_kc = pickle.load(f)
+            print(f"Loaded qid_to_kc from {pickle_path}")
+        else:
+            raise FileNotFoundError(f"Cannot find {pickle_path}")
+            
+    elif format == "json":
+        json_path = os.path.join(data_dir, "qid_to_kc.json")
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as f:
+                qid_to_kc = json.load(f)
+            print(f"Loaded qid_to_kc from {json_path}")
+        else:
+            raise FileNotFoundError(f"Cannot find {json_path}")
+            
+    elif format == "combined":
+        combined_path = os.path.join(data_dir, "question_data_combined.pkl")
+        if os.path.exists(combined_path):
+            with open(combined_path, 'rb') as f:
+                data = pickle.load(f)
+            question_df = data['question_df']
+            qid_to_kc = data['qid_to_kc']
+            print(f"Loaded combined data from {combined_path}")
+        else:
+            raise FileNotFoundError(f"Cannot find {combined_path}")
+    
+    print(f"Loaded {len(question_df)} questions and {len(qid_to_kc)} KC mappings")
     return question_df, qid_to_kc
+
 
 def check_requirements():
     """Verify all requirements are met before running."""
@@ -234,7 +289,7 @@ def generate_all_embeddings():
     
     # Step 2: Load data
     print("\n📊 Loading your data...")
-    question_df, qid_to_kc = load_your_data()
+    question_df, qid_to_kc = load_your_data(data_dir="./my_data")
     print(f"   - Loaded {len(question_df)} questions")
     print(f"   - Loaded {len(set(qid_to_kc.values()))} unique KCs")
     
