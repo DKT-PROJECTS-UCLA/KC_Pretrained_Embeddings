@@ -1,0 +1,15 @@
+{
+  "openai_api_key": "your-openai-api-key-here",
+  "cohere_api_key": "your-cohere-api-key-here",
+  "note": "Replace the API keys above with your actual keys",
+  "instructions": {
+    "openai": "Get your API key from: https://platform.openai.com/api-keys",
+    "cohere": "Get your API key from: https://dashboard.cohere.ai/api-keys",
+    "security": "Keep this file secure and never commit it to version control"
+  },
+  "model_preferences": {
+    "openai_default": "text-embedding-3-small",
+    "cohere_default": "embed-english-v3.0", 
+    "bert_default": "all-MiniLM-L6-v2"
+  }
+}
