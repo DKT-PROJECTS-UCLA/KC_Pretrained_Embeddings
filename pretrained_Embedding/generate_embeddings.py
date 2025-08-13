@@ -10,6 +10,7 @@ import pickle
 import logging
 from pathlib import Path
 from typing import Dict, Tuple 
+import json  # ← ADD THIS LINE
 
 import pandas as pd
 import torch
@@ -613,12 +614,798 @@ def load_and_use_embeddings(pipeline_name="pipeline_1"):
 # MAIN EXECUTION
 # =============================================================================
 
-if __name__ == "__main__":
-    # Generate all embeddings
-    generate_all_embeddings()
+def load_your_complete_mappings(
+    mappings_dir: str = "mappings_output",
+    keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
+) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
+    """
+    Load all mappings from your file structure.
     
-    # Example of loading and using embeddings
-    print("\n" + "="*50)
-    print("EXAMPLE: Loading Pipeline 1 embeddings")
-    print("="*50)
-    load_and_use_embeddings("pipeline_1")
+    Parameters
+    ----------
+    mappings_dir : str
+        Directory containing your mapping files
+    keyid2idx_path : str
+        Path to keyid2idx.json file with final concept ordering
+        
+    Returns
+    -------
+    Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]
+        (qid_to_kc_name, kc_name_to_id, kc_id_to_position)
+    """
+    
+    mappings_path = Path(mappings_dir)
+    
+    print(f"📂 Loading mappings from {mappings_dir}/")
+    
+    # 1. Load qid_to_kc (question_id -> kc_name)
+    qid_to_kc_json_path = mappings_path / "qid_to_kc.json"
+    with open(qid_to_kc_json_path, 'r') as f:
+        qid_to_kc_name = json.load(f)
+    print(f"   ✅ qid_to_kc: {len(qid_to_kc_name)} mappings")
+    
+    # 2. Load kc_name_to_id
+    kc_name_to_id_path = mappings_path / "kc_name_to_id.json"
+    with open(kc_name_to_id_path, 'r') as f:
+        kc_name_to_id = json.load(f)
+    print(f"   ✅ kc_name_to_id: {len(kc_name_to_id)} mappings")
+    
+    # 3. Load final concept ordering from keyid2idx.json
+    with open(keyid2idx_path, 'r') as f:
+        keyid2idx = json.load(f)
+    
+    if 'concepts' not in keyid2idx:
+        raise ValueError(f"keyid2idx.json must contain 'concepts' field")
+    
+    # Convert concepts mapping: kc_id (str) -> position (int)
+    concepts_raw = keyid2idx['concepts']
+    kc_id_to_position = {kc_id: int(position) for kc_id, position in concepts_raw.items()}
+    print(f"   ✅ concepts (final ordering): {len(kc_id_to_position)} positions")
+    
+    # Show some examples
+    print(f"\n📋 Sample mappings:")
+    sample_qid = list(qid_to_kc_name.keys())[0]
+    sample_kc_name = qid_to_kc_name[sample_qid]
+    print(f"   Question: '{sample_qid}' -> KC name: '{sample_kc_name}'")
+    
+    if sample_kc_name in kc_name_to_id:
+        sample_kc_id = kc_name_to_id[sample_kc_name]
+        print(f"   KC name: '{sample_kc_name}' -> KC ID: {sample_kc_id}")
+        
+        if str(sample_kc_id) in concepts_raw:
+            sample_position = concepts_raw[str(sample_kc_id)]
+            print(f"   KC ID: {sample_kc_id} -> Position: {sample_position}")
+            print(f"   Complete chain: '{sample_qid}' -> '{sample_kc_name}' -> {sample_kc_id} -> position {sample_position}")
+    
+    return qid_to_kc_name, kc_name_to_id, kc_id_to_position
+
+
+
+
+def validate_your_mapping_chain(
+    qid_to_kc_name: Dict[str, str],
+    kc_name_to_id: Dict[str, int], 
+    kc_id_to_position: Dict[str, int]
+) -> bool:
+    """
+    Validate your complete mapping chain.
+    
+    Returns
+    -------
+    bool
+        True if all mappings are complete and valid
+    """
+    
+    print(f"\n🔍 Validating mapping chain...")
+    
+    # Get unique KC names from questions
+    data_kc_names = set(qid_to_kc_name.values())
+    mapping_kc_names = set(kc_name_to_id.keys())
+    
+    # Get KC IDs
+    mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
+    position_kc_ids = set(kc_id_to_position.keys())
+    
+    print(f"   KC names in questions: {len(data_kc_names)}")
+    print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
+    print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
+    print(f"   KC IDs with positions: {len(position_kc_ids)}")
+    
+    # Check for missing mappings
+    missing_kc_names = data_kc_names - mapping_kc_names
+    missing_kc_ids = mapped_kc_ids - position_kc_ids
+    
+    is_valid = True
+    
+    if missing_kc_names:
+        print(f"   ❌ KC names without ID mappings: {len(missing_kc_names)}")
+        if len(missing_kc_names) <= 5:
+            print(f"      {list(missing_kc_names)}")
+        else:
+            print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
+        is_valid = False
+    
+    if missing_kc_ids:
+        print(f"   ❌ KC IDs without positions: {len(missing_kc_ids)}")
+        print(f"      {list(missing_kc_ids)}")
+        is_valid = False
+    
+    if is_valid:
+        print(f"   ✅ All mappings validated successfully!")
+        
+        # Show mapping statistics
+        total_questions = len(qid_to_kc_name)
+        total_kc_names = len(data_kc_names)
+        total_positions = len(kc_id_to_position)
+        
+        print(f"\n📊 Mapping Statistics:")
+        print(f"   Total questions: {total_questions:,}")
+        print(f"   Unique KC names: {total_kc_names}")
+        print(f"   Final positions: {total_positions}")
+        print(f"   Max position: {max(kc_id_to_position.values())}")
+        
+    return is_valid
+
+
+# def create_question_df_from_csv(
+#     mappings_dir: str = "mappings_output"
+# ) -> pd.DataFrame:
+#     """
+#     Create question_df from your questions_with_kc.csv file.
+    
+#     Parameters
+#     ----------
+#     mappings_dir : str
+#         Directory containing questions_with_kc.csv
+        
+#     Returns
+#     -------
+#     pd.DataFrame
+#         DataFrame with required columns for the pipeline
+#     """
+    
+#     csv_path = Path(mappings_dir) / "questions_with_kc.csv"
+    
+#     print(f"📊 Loading questions from {csv_path}")
+#     df = pd.read_csv(csv_path)
+    
+#     # Create the required format for the pipeline
+#     question_df = pd.DataFrame({
+#         'question_id': df['question_id'].astype(str),
+#         'question_text': df['problem_body']
+#     })
+    
+#     print(f"   ✅ Loaded {len(question_df)} questions")
+#     print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
+    
+#     return question_df
+
+def create_question_df_from_csv(
+    mappings_dir: str = "mappings_output"
+) -> pd.DataFrame:
+    """
+    Create question_df from your questions_with_kc.csv file.
+    FIXED: Ensures question IDs match the format in qid_to_kc.json
+    """
+    
+    csv_path = Path(mappings_dir) / "questions_with_kc.csv"
+    
+    print(f"📊 Loading questions from {csv_path}")
+    df = pd.read_csv(csv_path)
+    
+    # FIXED: Convert question_id to match qid_to_kc format (add 'q' prefix)
+    question_df = pd.DataFrame({
+        'question_id': 'q' + df['question_id'].astype(str),  # Add 'q' prefix
+        'question_text': df['problem_body']
+    })
+    
+    print(f"   ✅ Loaded {len(question_df)} questions")
+    print(f"   Sample question ID: {question_df.iloc[0]['question_id']}")
+    print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
+    
+    return question_df
+
+
+
+
+# def convert_sa_to_final_ordered_tensor(
+#     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
+#     kc_name_to_id: Dict[str, int],
+#     kc_id_to_position: Dict[str, int],
+#     verbose: bool = True
+# ) -> torch.Tensor:
+#     """
+#     Convert SA embeddings to final ordered tensor using your exact mappings.
+    
+#     Parameters
+#     ----------
+#     sa_embeddings : Dict[Tuple[str, bool], torch.Tensor]
+#         SA embeddings: {(kc_name, is_correct): embedding_tensor}
+#     kc_name_to_id : Dict[str, int]
+#         KC name to ID mapping
+#     kc_id_to_position : Dict[str, int]
+#         KC ID to position mapping (from keyid2idx.json)
+#     verbose : bool
+#         Print detailed information
+        
+#     Returns
+#     -------
+#     torch.Tensor
+#         Final ordered tensor ready for DKT
+#     """
+    
+#     # Determine tensor size
+#     max_position = max(kc_id_to_position.values())
+#     tensor_size = max_position + 1  # 0-indexed positions
+    
+#     # Get embedding dimension
+#     sample_embedding = next(iter(sa_embeddings.values()))
+#     embedding_dim = sample_embedding.shape[0]
+    
+#     # Create ordered tensor
+#     ordered_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+    
+#     # Track placements
+#     placed_correct = 0
+#     placed_incorrect = 0
+#     failed_placements = []
+    
+#     # Process each SA embedding
+#     for (kc_name, is_correct), embedding in sa_embeddings.items():
+        
+#         # KC name -> KC ID
+#         if kc_name not in kc_name_to_id:
+#             failed_placements.append(f"KC name '{kc_name}' not found in kc_name_to_id")
+#             continue
+        
+#         kc_id = kc_name_to_id[kc_name]
+#         kc_id_str = str(kc_id)
+        
+#         # KC ID -> position
+#         if kc_id_str not in kc_id_to_position:
+#             failed_placements.append(f"KC ID '{kc_id}' (from '{kc_name}') not found in concepts")
+#             continue
+        
+#         position = kc_id_to_position[kc_id_str]
+        
+#         # Place in tensor
+#         if is_correct:
+#             # Correct: positions 0 to tensor_size-1
+#             ordered_tensor[position] = embedding
+#             placed_correct += 1
+#         else:
+#             # Incorrect: positions tensor_size to 2*tensor_size-1
+#             ordered_tensor[tensor_size + position] = embedding
+#             placed_incorrect += 1
+    
+#     if verbose:
+#         print(f"✅ Created final ordered tensor: {ordered_tensor.shape}")
+#         print(f"   Tensor layout: [{tensor_size}, {embedding_dim}] × 2")
+#         print(f"   Rows 0-{tensor_size-1}: Correct embeddings by keyid2idx position")
+#         print(f"   Rows {tensor_size}-{2*tensor_size-1}: Incorrect embeddings by keyid2idx position")
+#         print(f"   Successfully placed correct: {placed_correct}")
+#         print(f"   Successfully placed incorrect: {placed_incorrect}")
+#         print(f"   Total parameters: {ordered_tensor.numel():,}")
+        
+#         if failed_placements:
+#             print(f"⚠️  Failed placements: {len(failed_placements)}")
+#             for failure in failed_placements[:3]:
+#                 print(f"      {failure}")
+#             if len(failed_placements) > 3:
+#                 print(f"      ... and {len(failed_placements)-3} more")
+        
+#         # Show example mappings
+#         print(f"\n📋 Example position mappings:")
+#         for kc_id, position in list(kc_id_to_position.items())[:5]:
+#             print(f"   KC ID {kc_id} -> position {position}")
+    
+#     return ordered_tensor
+
+
+def convert_sa_to_final_ordered_tensor(
+    sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
+    kc_name_to_id: Dict[str, int],
+    kc_id_to_position: Dict[str, int],
+    verbose: bool = True
+) -> torch.Tensor:
+    """
+    Convert SA embeddings to final ordered tensor using your exact mappings.
+    FIXED: Handles both tensor and string formats from add_words strategy
+    """
+    
+    # FIXED: Filter out non-tensor SA embeddings (from add_words strategy)
+    tensor_sa_embeddings = {}
+    string_sa_embeddings = {}
+    
+    for key, value in sa_embeddings.items():
+        if isinstance(value, torch.Tensor):
+            tensor_sa_embeddings[key] = value
+        elif isinstance(value, str):
+            string_sa_embeddings[key] = value
+        else:
+            print(f"⚠️  Unknown SA embedding format for {key}: {type(value)}")
+    
+    if verbose:
+        print(f"🔍 SA embeddings analysis:")
+        print(f"   Tensor embeddings: {len(tensor_sa_embeddings)}")
+        print(f"   String embeddings: {len(string_sa_embeddings)} (add_words strategy)")
+    
+    # For add_words strategy, we need to convert the KC embeddings instead
+    if len(tensor_sa_embeddings) == 0 and len(string_sa_embeddings) > 0:
+        print(f"⚠️  SA embeddings are in text format (add_words strategy)")
+        print(f"   This pipeline uses modified question texts instead of tensor embeddings")
+        print(f"   Creating dummy tensor for consistency...")
+        
+        # Create a dummy tensor with expected shape
+        max_position = max(kc_id_to_position.values())
+        tensor_size = max_position + 1
+        embedding_dim = 384  # Default BERT dimension
+        
+        dummy_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+        
+        if verbose:
+            print(f"   Created dummy tensor: {dummy_tensor.shape}")
+            print(f"   ⚠️  This tensor contains zeros - add_words strategy embeddings are in KC format")
+        
+        return dummy_tensor
+    
+    # Process tensor embeddings normally
+    if len(tensor_sa_embeddings) == 0:
+        raise ValueError("No valid tensor embeddings found in SA embeddings")
+    
+    # Determine tensor size
+    max_position = max(kc_id_to_position.values())
+    tensor_size = max_position + 1  # 0-indexed positions
+    
+    # Get embedding dimension
+    sample_embedding = next(iter(tensor_sa_embeddings.values()))
+    embedding_dim = sample_embedding.shape[0]
+    
+    # Create ordered tensor
+    ordered_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+    
+    # Track placements
+    placed_correct = 0
+    placed_incorrect = 0
+    failed_placements = []
+    
+    # Process each tensor SA embedding
+    for (kc_name, is_correct), embedding in tensor_sa_embeddings.items():
+        
+        # KC name -> KC ID
+        if kc_name not in kc_name_to_id:
+            failed_placements.append(f"KC name '{kc_name}' not found in kc_name_to_id")
+            continue
+        
+        kc_id = kc_name_to_id[kc_name]
+        kc_id_str = str(kc_id)
+        
+        # KC ID -> position
+        if kc_id_str not in kc_id_to_position:
+            failed_placements.append(f"KC ID '{kc_id}' (from '{kc_name}') not found in concepts")
+            continue
+        
+        position = kc_id_to_position[kc_id_str]
+        
+        # Place in tensor
+        if is_correct:
+            # Correct: positions 0 to tensor_size-1
+            ordered_tensor[position] = embedding
+            placed_correct += 1
+        else:
+            # Incorrect: positions tensor_size to 2*tensor_size-1
+            ordered_tensor[tensor_size + position] = embedding
+            placed_incorrect += 1
+    
+    if verbose:
+        print(f"✅ Created final ordered tensor: {ordered_tensor.shape}")
+        print(f"   Tensor layout: [{tensor_size}, {embedding_dim}] × 2")
+        print(f"   Rows 0-{tensor_size-1}: Correct embeddings by keyid2idx position")
+        print(f"   Rows {tensor_size}-{2*tensor_size-1}: Incorrect embeddings by keyid2idx position")
+        print(f"   Successfully placed correct: {placed_correct}")
+        print(f"   Successfully placed incorrect: {placed_incorrect}")
+        print(f"   Total parameters: {ordered_tensor.numel():,}")
+        
+        if failed_placements:
+            print(f"⚠️  Failed placements: {len(failed_placements)}")
+            for failure in failed_placements[:3]:
+                print(f"      {failure}")
+            if len(failed_placements) > 3:
+                print(f"      ... and {len(failed_placements)-3} more")
+    
+    return ordered_tensor
+
+def debug_question_ids():
+    """Debug function to check question ID formats."""
+    
+    print("🔍 Debugging question ID formats...")
+    
+    # Load qid_to_kc
+    with open("mappings_output/qid_to_kc.json", 'r') as f:
+        qid_to_kc = json.load(f)
+    
+    # Load CSV
+    csv_df = pd.read_csv("mappings_output/questions_with_kc.csv")
+    
+    # Check formats
+    sample_qid_json = list(qid_to_kc.keys())[0]
+    sample_qid_csv = str(csv_df['question_id'].iloc[0])
+    
+    print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
+    print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
+    
+    # Check if they match
+    csv_qids = set('q' + csv_df['question_id'].astype(str))
+    json_qids = set(qid_to_kc.keys())
+    
+    overlap = csv_qids & json_qids
+    only_csv = csv_qids - json_qids
+    only_json = json_qids - csv_qids
+    
+    print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
+    print(f"   QIDs in JSON: {len(json_qids)}")
+    print(f"   Overlapping QIDs: {len(overlap)}")
+    print(f"   Only in CSV: {len(only_csv)}")
+    print(f"   Only in JSON: {len(only_json)}")
+    
+    # FIXED: Compare len(overlap) instead of overlap
+    if len(overlap) > 0:
+        print(f"   ✅ Found {len(overlap)} matching question IDs")
+    else:
+        print(f"   ❌ No matching question IDs found!")
+
+def generate_final_embeddings():
+    """
+    Generate embeddings using your complete file structure.
+    """
+    
+    print("🎯 Generating embeddings with your file structure")
+    print("="*60)
+    
+    # Step 1: Load all mappings
+    qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_your_complete_mappings()
+    
+    # Step 2: Validate mappings
+    if not validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position):
+        print("❌ Mapping validation failed. Please check your files.")
+        return
+    
+    # Step 3: Create question DataFrame
+    question_df = create_question_df_from_csv()
+    
+    # Step 4: Setup embedding system
+    provider, model, embedding_dim = check_requirements()
+    provider_info = {"provider": provider, "model": model, "embedding_dim": embedding_dim}
+    
+    # Step 5: Setup pipelines
+    print(f"\n⚙️ Setting up pipeline configurations...")
+    configs = get_pipeline_configs(question_df, model, provider)
+    
+    # Step 6: Create output directory
+    output_dir = Path("final_embeddings")
+    output_dir.mkdir(exist_ok=True)
+    
+    # Save complete mapping info
+    mapping_info = {
+        "source_files": {
+            "qid_to_kc": "mappings_output/qid_to_kc.json",
+            "kc_name_to_id": "mappings_output/kc_name_to_id.json", 
+            "concepts": "keyid2idx.json",
+            "questions": "mappings_output/questions_with_kc.csv"
+        },
+        "mapping_statistics": {
+            "total_questions": len(qid_to_kc_name),
+            "unique_kc_names": len(set(qid_to_kc_name.values())),
+            "kc_name_mappings": len(kc_name_to_id),
+            "concept_positions": len(kc_id_to_position),
+            "max_position": max(kc_id_to_position.values())
+        },
+        "tensor_layout": {
+            "description": "Final tensor layout based on keyid2idx.json",
+            "positions_0_to_N": "correct_embeddings_by_keyid2idx_order",
+            "positions_N_to_2N": "incorrect_embeddings_by_keyid2idx_order"
+        }
+    }
+    
+    with open(output_dir / "mapping_info.json", 'w') as f:
+        json.dump(mapping_info, f, indent=2)
+    
+    # Step 7: Generate embeddings for all pipelines
+    results = {}
+    final_embeddings = {}
+    
+    for pipeline_name, config in configs.items():
+        print(f"\n🚀 Processing {pipeline_name}")
+        print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
+        
+        try:
+            # Generate embeddings
+            pipeline = EmbeddingPipeline(config)
+            q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
+            
+            if sa_vecs:
+                # Convert to final ordered tensor
+                final_tensor = convert_sa_to_final_ordered_tensor(
+                    sa_vecs, kc_name_to_id, kc_id_to_position
+                )
+                
+                final_embeddings[pipeline_name] = final_tensor
+                
+                # Save final DKT-ready tensor
+                torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
+                
+                # Save original embeddings for reference
+                clean_config = EmbeddingPipelineConfig(
+                    question_embedding_model=config.question_embedding_model,
+                    kc_strategy=config.kc_strategy,
+                    sa_strategy=config.sa_strategy,
+                    execution_order=config.execution_order,
+                    kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
+                    sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
+                )
+                
+                with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
+                    pickle.dump({
+                        'question_embeddings': q_vecs,
+                        'kc_embeddings': kc_vecs,
+                        'sa_embeddings': sa_vecs,
+                        'config': clean_config,
+                        'provider_info': provider_info
+                    }, f)
+                
+                print(f"   ✅ Success: {final_tensor.shape}")
+                
+            results[pipeline_name] = True
+            
+        except Exception as e:
+            print(f"   ❌ Failed: {e}")
+            import traceback
+            traceback.print_exc()
+            results[pipeline_name] = False
+    
+    # Step 8: Save all final embeddings
+    if final_embeddings:
+        torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
+        
+        # Create comprehensive summary
+        sample_tensor = next(iter(final_embeddings.values()))
+        
+        summary = {
+            "generation_timestamp": str(pd.Timestamp.now()),
+            "successful_pipelines": len(final_embeddings),
+            "total_pipelines": len(results),
+            "final_tensor_shape": list(sample_tensor.shape),
+            "total_parameters_per_pipeline": sample_tensor.numel(),
+            "embedding_provider": provider_info,
+            "data_statistics": mapping_info["mapping_statistics"],
+            "pipeline_results": results,
+            "file_locations": {
+                "individual_tensors": "final_embeddings/pipeline_X_final_dkt.pt",
+                "all_tensors": "final_embeddings/all_final_dkt_embeddings.pt",
+                "original_embeddings": "final_embeddings/pipeline_X_original.pkl"
+            }
+        }
+        
+        with open(output_dir / "generation_summary.json", 'w') as f:
+            json.dump(summary, f, indent=2)
+    
+    # Step 9: Final report
+    successful = sum(results.values())
+    total = len(results)
+    
+    print(f"\n📈 FINAL GENERATION REPORT")
+    print(f"="*50)
+    print(f"Successful pipelines: {successful}/{total}")
+    print(f"Questions processed: {len(question_df):,}")
+    print(f"KC names: {len(set(qid_to_kc_name.values()))}")
+    print(f"Final positions: {len(kc_id_to_position)}")
+    
+    if final_embeddings:
+        sample_shape = next(iter(final_embeddings.values())).shape
+        print(f"DKT tensor shape: {sample_shape}")
+        print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
+        print(f"Total embedding dimensions: {len(final_embeddings)} × {sample_shape[0] * sample_shape[1]:,}")
+    
+    print(f"\nPipeline Results:")
+    for pipeline_name, success in results.items():
+        status = "✅" if success else "❌"
+        print(f"   {status} {pipeline_name}")
+    
+    if successful > 0:
+        print(f"\n🎉 SUCCESS! DKT-ready embeddings generated!")
+        print(f"📁 Output directory: final_embeddings/")
+        print(f"🎯 Use: final_embeddings/pipeline_X_final_dkt.pt for DKT training")
+        print(f"📊 Tensor format: [pos0_correct...posN_correct, pos0_incorrect...posN_incorrect]")
+        print(f"🔢 Positions based on keyid2idx.json concepts mapping")
+
+
+def generate_final_embeddings_with_debug():
+    """
+    Generate embeddings with debugging for question ID issues.
+    """
+    
+    print("🎯 Generating embeddings with your file structure")
+    print("="*60)
+    
+    # Step 0: Debug question IDs
+    debug_question_ids()
+    
+    # Step 1: Load all mappings
+    qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_your_complete_mappings()
+    
+    # Step 2: Validate mappings
+    if not validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position):
+        print("❌ Mapping validation failed. Please check your files.")
+        return
+    
+    # Step 3: Create question DataFrame with fixed IDs
+    question_df = create_question_df_from_csv()
+    
+    # Step 3.5: Verify question ID overlap
+    df_qids = set(question_df['question_id'])
+    mapping_qids = set(qid_to_kc_name.keys())
+    overlap = df_qids & mapping_qids
+    
+    print(f"\n🔍 Question ID verification:")
+    print(f"   Question IDs in DataFrame: {len(df_qids)}")
+    print(f"   Question IDs in mapping: {len(mapping_qids)}")
+    print(f"   Overlapping IDs: {len(overlap)}")
+    
+    if len(overlap) == 0:
+        print("❌ No overlapping question IDs! Cannot proceed.")
+        return
+    elif len(overlap) < len(df_qids) * 0.8:
+        print(f"⚠️  Low overlap ({len(overlap)}/{len(df_qids)} = {len(overlap)/len(df_qids)*100:.1f}%)")
+        print("   Proceeding with available questions...")
+    else:
+        print(f"✅ Good overlap ({len(overlap)}/{len(df_qids)} = {len(overlap)/len(df_qids)*100:.1f}%)")
+    
+    # Step 4: Setup embedding system
+    provider, model, embedding_dim = check_requirements()
+    provider_info = {"provider": provider, "model": model, "embedding_dim": embedding_dim}
+    
+    # Step 5: Setup pipelines
+    print(f"\n⚙️ Setting up pipeline configurations...")
+    configs = get_pipeline_configs(question_df, model, provider)
+    
+    # Step 6: Create output directory
+    output_dir = Path("final_embeddings")
+    output_dir.mkdir(exist_ok=True)
+    
+    # Save complete mapping info
+    mapping_info = {
+        "source_files": {
+            "qid_to_kc": "mappings_output/qid_to_kc.json",
+            "kc_name_to_id": "mappings_output/kc_name_to_id.json", 
+            "concepts": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+            "questions": "mappings_output/questions_with_kc.csv"
+        },
+        "mapping_statistics": {
+            "total_questions_csv": len(question_df),
+            "total_questions_mapping": len(qid_to_kc_name),
+            "overlapping_questions": len(overlap),
+            "unique_kc_names": len(set(qid_to_kc_name.values())),
+            "kc_name_mappings": len(kc_name_to_id),
+            "concept_positions": len(kc_id_to_position),
+            "max_position": max(kc_id_to_position.values())
+        },
+        "tensor_layout": {
+            "description": "Final tensor layout based on keyid2idx.json",
+            "positions_0_to_N": "correct_embeddings_by_keyid2idx_order",
+            "positions_N_to_2N": "incorrect_embeddings_by_keyid2idx_order"
+        }
+    }
+    
+    with open(output_dir / "mapping_info.json", 'w') as f:
+        json.dump(mapping_info, f, indent=2)
+    
+    # Step 7: Generate embeddings for all pipelines
+    results = {}
+    final_embeddings = {}
+    
+    for pipeline_name, config in configs.items():
+        print(f"\n🚀 Processing {pipeline_name}")
+        print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
+        
+        try:
+            # Generate embeddings
+            pipeline = EmbeddingPipeline(config)
+            q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
+            
+            if sa_vecs:
+                # Convert to final ordered tensor (with fixes)
+                final_tensor = convert_sa_to_final_ordered_tensor(
+                    sa_vecs, kc_name_to_id, kc_id_to_position
+                )
+                
+                final_embeddings[pipeline_name] = final_tensor
+                
+                # Save final DKT-ready tensor
+                torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
+                
+                # Save original embeddings for reference
+                clean_config = EmbeddingPipelineConfig(
+                    question_embedding_model=config.question_embedding_model,
+                    kc_strategy=config.kc_strategy,
+                    sa_strategy=config.sa_strategy,
+                    execution_order=config.execution_order,
+                    kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
+                    sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
+                )
+                
+                with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
+                    pickle.dump({
+                        'question_embeddings': q_vecs,
+                        'kc_embeddings': kc_vecs,
+                        'sa_embeddings': sa_vecs,
+                        'config': clean_config,
+                        'provider_info': provider_info
+                    }, f)
+                
+                print(f"   ✅ Success: {final_tensor.shape}")
+                
+            results[pipeline_name] = True
+            
+        except Exception as e:
+            print(f"   ❌ Failed: {e}")
+            import traceback
+            traceback.print_exc()
+            results[pipeline_name] = False
+    
+    # Step 8: Save all final embeddings and generate summary (same as before)
+    if final_embeddings:
+        torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
+        
+        sample_tensor = next(iter(final_embeddings.values()))
+        
+        summary = {
+            "generation_timestamp": str(pd.Timestamp.now()),
+            "successful_pipelines": len(final_embeddings),
+            "total_pipelines": len(results),
+            "final_tensor_shape": list(sample_tensor.shape),
+            "total_parameters_per_pipeline": sample_tensor.numel(),
+            "embedding_provider": provider_info,
+            "data_statistics": mapping_info["mapping_statistics"],
+            "pipeline_results": results,
+        }
+        
+        with open(output_dir / "generation_summary.json", 'w') as f:
+            json.dump(summary, f, indent=2)
+    
+    # Step 9: Final report
+    successful = sum(results.values())
+    total = len(results)
+    
+    print(f"\n📈 FINAL GENERATION REPORT")
+    print(f"="*50)
+    print(f"Successful pipelines: {successful}/{total}")
+    print(f"Questions processed: {len(question_df):,}")
+    print(f"Questions with embeddings: {len(overlap):,}")
+    print(f"KC names: {len(set(qid_to_kc_name.values()))}")
+    print(f"Final positions: {len(kc_id_to_position)}")
+    
+    if final_embeddings:
+        sample_shape = next(iter(final_embeddings.values())).shape
+        print(f"DKT tensor shape: {sample_shape}")
+        print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
+    
+    print(f"\nPipeline Results:")
+    for pipeline_name, success in results.items():
+        status = "✅" if success else "❌"
+        print(f"   {status} {pipeline_name}")
+    
+    if successful > 0:
+        print(f"\n🎉 SUCCESS! DKT-ready embeddings generated!")
+        print(f"📁 Output directory: final_embeddings/")
+        print(f"🎯 Use: final_embeddings/pipeline_X_final_dkt.pt for DKT training")
+
+
+if __name__ == "__main__":
+    # Generate final embeddings using your file structure
+    generate_final_embeddings_with_debug()
+    
+    print(f"\n📋 Files used:")
+    print(f"   - mappings_output/qid_to_kc.json")
+    print(f"   - mappings_output/kc_name_to_id.json") 
+    print(f"   - keyid2idx.json (concepts)")
+    print(f"   - mappings_output/questions_with_kc.csv")
