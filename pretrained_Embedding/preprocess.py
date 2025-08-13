@@ -4,54 +4,33 @@ import numpy as np
 from bs4 import BeautifulSoup
 import math
 import os
-# import pyarrow
-# from transformers import AutoModel
-# from datasets import Dataset, load_dataset, DatasetDict
-
-
-
 
 def remove_tags(html):
     soup = BeautifulSoup(html, "html.parser")
 
-    # Find and replace <img> tags with their 'alt' attribute
     for img in soup.find_all('img'):
-        alt_text = img.get('alt', '')  # default to empty string if 'alt' is None
+        alt_text = img.get('alt', '')  
         if alt_text:
-            # Create a new text node
             new_text = soup.new_string(" " + alt_text + " ")
             img.replace_with(new_text)
         else:
-            # Remove the image if no alt text
             img.decompose()
 
-    # Remove all script and style elements
     for tag in soup(['script', 'style']):
         tag.decompose()
 
-    # Extract the text, cleaning up any excessive whitespace
     clean_text = ' '.join(soup.stripped_strings)
     return clean_text
 
-# Example usage with a DataFrame column
-# subset_df['problem_body'] = subset_df['problem_body'].apply(remove_tags)
-
-
 # dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv', 
 #  'assist2012/2012-2013-data-with-predictions-4-final.csv', 
-#  'assist2015/2015_100_skill_builders_main_problems.csv', 
 #  'assist2017/anonymized_full_release_competition_dataset.csv']
-# datasets = ['assist2009', 'assist2012', 'assist2015', 'assist2017']
+# datasets = ['assist2009', 'assist2012', 'assist2017']
 
-dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv', 
- 'assist2012/2012-2013-data-with-predictions-4-final.csv', 
- 'assist2017/anonymized_full_release_competition_dataset.csv']
-datasets = ['assist2009', 'assist2012', 'assist2017']
+dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv']
+datasets = ['assist2009']
 
 pb_df = pd.read_csv('./data_subsets/ProblemBodies_23.csv', low_memory=False)
-
-
-
 
 for dataset, dataset_path in zip(datasets, dataset_paths):
     print(f'Processing dataset: {dataset}')

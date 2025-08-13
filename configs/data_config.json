@@ -62,8 +62,8 @@
     },
     "assist2009": {
         "dpath": "../data/assist2009",
-        "num_q": 17737,
-        "num_c": 123,
+        "num_q": 6035,
+        "num_c": 75,
         "input_type": [
             "questions",
             "concepts"

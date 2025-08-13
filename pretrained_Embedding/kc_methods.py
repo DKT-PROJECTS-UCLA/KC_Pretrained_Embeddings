@@ -116,67 +116,149 @@ def kc_average(
     return kc_embedding
 
 
+# @_kc_register(KCEmbeddingStrategy.STUFF_WINDOW)
+# def kc_stuff_window(
+#     kc_id: Hashable,
+#     question_ids: Sequence[Hashable],
+#     question_embeddings: Dict[Hashable, torch.Tensor],
+#     *,
+#     window_size: int = 8192,  # Default to OpenAI context window
+#     question_df: pd.DataFrame | None = None,
+#     text_col: str = "question_text",
+#     id_col: str = "question_id",
+#     text_to_embedding_fn=None,  # Function to embed the concatenated text
+#     separator: str = " [SEP] ",  # Separator between questions
+#     rng: random.Random | None = None,
+# ) -> torch.Tensor:
+#     """
+#     Pack (stuff) questions into a context window by concatenating question texts,
+#     then embed the concatenated text as a single KC representation.
+    
+#     The goal is to capture as many words belonging to a KC as possible to 
+#     represent the KC more accurately by leveraging the full vocabulary.
+    
+#     Parameters
+#     ----------
+#     kc_id : Hashable
+#         The knowledge component identifier
+#     question_ids : Sequence[Hashable]
+#         List of question IDs that belong to this KC
+#     question_embeddings : Dict[Hashable, torch.Tensor]
+#         Not used in this strategy (we re-embed the concatenated text)
+#     window_size : int
+#         Maximum context window size in characters (default: 8192 for OpenAI)
+#     question_df : pd.DataFrame
+#         DataFrame containing question texts (required for this strategy)
+#     text_col : str
+#         Column name containing question text
+#     id_col : str
+#         Column name containing question IDs
+#     text_to_embedding_fn : callable
+#         Function to embed the concatenated text string
+#     separator : str
+#         String to separate individual questions in concatenation
+#     rng : random.Random
+#         Random number generator for reproducible sampling
+        
+#     Returns
+#     -------
+#     torch.Tensor
+#         Embedding of the concatenated question texts for this KC
+        
+#     Raises
+#     ------
+#     ValueError
+#         If required parameters are missing or no questions can be processed
+#     """
+#     if question_df is None:
+#         raise ValueError("question_df is required for stuff_window strategy")
+#     if text_to_embedding_fn is None:
+#         raise ValueError("text_to_embedding_fn is required for stuff_window strategy")
+    
+#     if rng is None:
+#         rng = random.Random(hash(kc_id))  # Deterministic based on KC ID
+    
+#     # Get question texts for this KC
+#     question_texts = {}
+#     for _, row in question_df.iterrows():
+#         qid = row[id_col]
+#         if qid in question_ids:
+#             question_texts[qid] = row[text_col]
+    
+#     if not question_texts:
+#         raise ValueError(f"KC '{kc_id}' has no valid question texts available")
+    
+#     # Randomly shuffle questions for sampling
+#     available_qids = list(question_texts.keys())
+#     rng.shuffle(available_qids)
+    
+#     # Pack questions into context window
+#     concatenated_parts = []
+#     total_length = 0
+#     used_questions = 0
+    
+#     for qid in available_qids:
+#         question_text = question_texts[qid].strip()
+        
+#         # Calculate length including separator
+#         additional_length = len(question_text)
+#         if concatenated_parts:  # Add separator length if not first question
+#             additional_length += len(separator)
+        
+#         # Check if adding this question would exceed window
+#         if total_length + additional_length > window_size:
+#             break
+            
+#         # Add question to concatenation
+#         concatenated_parts.append(question_text)
+#         total_length += additional_length
+#         used_questions += 1
+    
+#     if not concatenated_parts:
+#         raise ValueError(f"KC '{kc_id}': No questions fit within window_size={window_size}")
+    
+#     # Create concatenated text
+#     concatenated_text = separator.join(concatenated_parts)
+    
+#     _logger.debug(
+#         f"KC '{kc_id}': stuffed {used_questions}/{len(available_qids)} questions "
+#         f"into {len(concatenated_text)} characters (limit: {window_size})"
+#     )
+    
+#     # Embed the concatenated text
+#     try:
+#         kc_embedding = text_to_embedding_fn(concatenated_text)
+#         if not isinstance(kc_embedding, torch.Tensor):
+#             kc_embedding = torch.tensor(kc_embedding, dtype=torch.float32)
+#         return kc_embedding
+#     except Exception as e:
+#         raise RuntimeError(f"Failed to embed concatenated text for KC '{kc_id}': {e}") from e
+
 @_kc_register(KCEmbeddingStrategy.STUFF_WINDOW)
 def kc_stuff_window(
     kc_id: Hashable,
     question_ids: Sequence[Hashable],
     question_embeddings: Dict[Hashable, torch.Tensor],
     *,
-    window_size: int = 8192,  # Default to OpenAI context window
+    window_size: int = 8192,
     question_df: pd.DataFrame | None = None,
     text_col: str = "question_text",
     id_col: str = "question_id",
-    text_to_embedding_fn=None,  # Function to embed the concatenated text
-    separator: str = " [SEP] ",  # Separator between questions
+    separator: str = " [SEP] ",
     rng: random.Random | None = None,
 ) -> torch.Tensor:
-    """
-    Pack (stuff) questions into a context window by concatenating question texts,
-    then embed the concatenated text as a single KC representation.
+    """Pack (stuff) questions into a context window by concatenating question texts."""
     
-    The goal is to capture as many words belonging to a KC as possible to 
-    represent the KC more accurately by leveraging the full vocabulary.
-    
-    Parameters
-    ----------
-    kc_id : Hashable
-        The knowledge component identifier
-    question_ids : Sequence[Hashable]
-        List of question IDs that belong to this KC
-    question_embeddings : Dict[Hashable, torch.Tensor]
-        Not used in this strategy (we re-embed the concatenated text)
-    window_size : int
-        Maximum context window size in characters (default: 8192 for OpenAI)
-    question_df : pd.DataFrame
-        DataFrame containing question texts (required for this strategy)
-    text_col : str
-        Column name containing question text
-    id_col : str
-        Column name containing question IDs
-    text_to_embedding_fn : callable
-        Function to embed the concatenated text string
-    separator : str
-        String to separate individual questions in concatenation
-    rng : random.Random
-        Random number generator for reproducible sampling
-        
-    Returns
-    -------
-    torch.Tensor
-        Embedding of the concatenated question texts for this KC
-        
-    Raises
-    ------
-    ValueError
-        If required parameters are missing or no questions can be processed
-    """
     if question_df is None:
         raise ValueError("question_df is required for stuff_window strategy")
-    if text_to_embedding_fn is None:
-        raise ValueError("text_to_embedding_fn is required for stuff_window strategy")
+    
+    # FIXED: Use global embedding function directly
+    import embedding_models as em
+    def text_to_embedding_fn(text):
+        return em._get_embedding(text, model=em._current_model, provider=em._current_provider)
     
     if rng is None:
-        rng = random.Random(hash(kc_id))  # Deterministic based on KC ID
+        rng = random.Random(hash(kc_id))
     
     # Get question texts for this KC
     question_texts = {}
@@ -202,7 +284,7 @@ def kc_stuff_window(
         
         # Calculate length including separator
         additional_length = len(question_text)
-        if concatenated_parts:  # Add separator length if not first question
+        if concatenated_parts:
             additional_length += len(separator)
         
         # Check if adding this question would exceed window
@@ -233,6 +315,7 @@ def kc_stuff_window(
         return kc_embedding
     except Exception as e:
         raise RuntimeError(f"Failed to embed concatenated text for KC '{kc_id}': {e}") from e
+
 
 
 @_kc_register(KCEmbeddingStrategy.KC_NAME_TEXT)
@@ -374,3 +457,61 @@ def kc_sample_question(
     
     return sampled_embedding
 
+
+
+# # Add this function to the end of your kc_methods.py file
+
+# def get_window_size_for_model(model_name: str) -> int:
+#     """
+#     Get appropriate context window size for different embedding models.
+    
+#     Parameters
+#     ----------
+#     model_name : str
+#         Name of the embedding model
+        
+#     Returns
+#     -------
+#     int
+#         Context window size in characters
+#     """
+#     # Model-specific window sizes (conservative estimates)
+#     window_sizes = {
+#         # OpenAI models
+#         "text-embedding-3-small": 8192,
+#         "text-embedding-3-large": 8192,
+#         "text-embedding-ada-002": 8192,
+        
+#         # Cohere models  
+#         "embed-english-v3.0": 4096,
+#         "embed-english-light-v3.0": 4096,
+#         "embed-multilingual-v3.0": 4096,
+#         "embed-multilingual-light-v3.0": 4096,
+        
+#         # BERT/SentenceTransformers (token limits converted to chars)
+#         "all-MiniLM-L6-v2": 2048,
+#         "all-mpnet-base-v2": 2048,
+#         "multi-qa-mpnet-base-dot-v1": 2048,
+#         "all-MiniLM-L12-v2": 2048,
+#         "paraphrase-MiniLM-L6-v2": 2048,
+        
+#         # Simple TF-IDF
+#         "simple-tfidf-384": 8192,
+#         "simple-tfidf-768": 8192
+#     }
+    
+#     return window_sizes.get(model_name, 2048)  # Conservative default
+
+
+def get_window_size_for_model(model_name: str) -> int:
+    """Get appropriate context window size for different embedding models."""
+    window_sizes = {
+        "text-embedding-3-small": 8192,
+        "text-embedding-3-large": 8192,
+        "all-MiniLM-L6-v2": 2048,
+        "all-mpnet-base-v2": 2048,
+        "multi-qa-mpnet-base-dot-v1": 2048,
+        "all-MiniLM-L12-v2": 2048,
+        "paraphrase-MiniLM-L6-v2": 2048,
+    }
+    return window_sizes.get(model_name, 2048)

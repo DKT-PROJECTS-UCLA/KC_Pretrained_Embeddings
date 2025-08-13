@@ -64,3 +64,5 @@ examples/nips2022-peiyou/
 examples/nips2022-ednet/
 examples/models/pretrained_Embedding/data_subsets/ProblemBodies_23.csv
 pretrained_Embedding/data_subsets/ProblemBodies_23.csv
+pretrained_Embedding/notes.txt
+pretrained_Embedding/tmp.py
