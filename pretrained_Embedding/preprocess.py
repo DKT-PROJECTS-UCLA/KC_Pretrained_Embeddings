@@ -22,13 +22,13 @@ def remove_tags(html):
     clean_text = ' '.join(soup.stripped_strings)
     return clean_text
 
-# dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv', 
-#  'assist2012/2012-2013-data-with-predictions-4-final.csv', 
-#  'assist2017/anonymized_full_release_competition_dataset.csv']
-# datasets = ['assist2009', 'assist2012', 'assist2017']
+dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv', 
+ 'assist2012/2012-2013-data-with-predictions-4-final.csv', 
+ 'assist2017/anonymized_full_release_competition_dataset.csv']
+datasets = ['assist2009', 'assist2012', 'assist2017']
 
-dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv']
-datasets = ['assist2009']
+# dataset_paths = ['assist2009/skill_builder_data_corrected_collapsed.csv']
+# datasets = ['assist2009']
 
 pb_df = pd.read_csv('./data_subsets/ProblemBodies_23.csv', low_memory=False)
 
