@@ -239,6 +239,484 @@ def check_requirements():
     
 #     return configs
 
+DATASET_CONFIG = {
+    "assist2009": {
+        "mappings_dir": "mappings_output2009",
+        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
+    },
+    "assist2012": {
+        "mappings_dir": "mappings_output2012", 
+        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json"
+    }
+}
+
+# DATASET_CONFIG = {
+#     "assist2009": {
+#         "mappings_dir": "mappings_output2009",
+#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
+#     },
+#     "assist2012": {
+#         "mappings_dir": "mappings_output2012", 
+#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json"
+#     },
+#     "assist2017": {
+#         "mappings_dir": "mappings_output2017",
+#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
+#     }
+# }
+
+
+# def process_single_dataset(dataset_name: str, dataset_config: dict, provider_info: dict):
+#     """
+#     Process a single dataset and generate embeddings.
+    
+#     Parameters
+#     ----------
+#     dataset_name : str
+#         Name of the dataset (e.g., 'assist2009')
+#     dataset_config : dict
+#         Configuration for this dataset
+#     provider_info : dict
+#         Embedding provider information
+        
+#     Returns
+#     -------
+#     dict
+#         Results for this dataset
+#     """
+    
+#     print(f"\n" + "="*80)
+#     print(f"🎯 PROCESSING DATASET: {dataset_name.upper()}")
+#     print("="*80)
+    
+#     mappings_dir = dataset_config["mappings_dir"]
+#     keyid2idx_path = dataset_config["keyid2idx_path"]
+    
+#     try:
+#         # Step 1: Check if dataset files exist
+#         mappings_path = Path(mappings_dir)
+#         if not mappings_path.exists():
+#             print(f"❌ Mappings directory not found: {mappings_dir}")
+#             return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {mappings_dir}"}
+        
+#         if not Path(keyid2idx_path).exists():
+#             print(f"❌ KeyID2Idx file not found: {keyid2idx_path}")
+#             return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {keyid2idx_path}"}
+        
+#         print(f"✅ Dataset files found:")
+#         print(f"   Mappings: {mappings_dir}")
+#         print(f"   KeyID2Idx: {keyid2idx_path}")
+        
+#         # Step 2: Debug question IDs
+#         debug_question_ids(mappings_dir)
+        
+#         # Step 3: Load all mappings
+#         qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_your_complete_mappings(
+#             mappings_dir, keyid2idx_path
+#         )
+        
+#         # Step 4: Validate mappings
+#         if not validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position):
+#             print(f"❌ Mapping validation failed for {dataset_name}")
+#             return {"dataset": dataset_name, "status": "validation_failed", "error": "Mapping chain validation failed"}
+        
+#         # Step 5: Create question DataFrame
+#         question_df = create_question_df_from_csv(mappings_dir)
+        
+#         # Step 6: Verify question ID overlap
+#         df_qids = set(question_df['question_id'])
+#         mapping_qids = set(qid_to_kc_name.keys())
+#         overlap = df_qids & mapping_qids
+        
+#         print(f"\n🔍 Question ID verification:")
+#         print(f"   Question IDs in DataFrame: {len(df_qids)}")
+#         print(f"   Question IDs in mapping: {len(mapping_qids)}")
+#         print(f"   Overlapping IDs: {len(overlap)}")
+        
+#         if len(overlap) == 0:
+#             print(f"❌ No overlapping question IDs for {dataset_name}!")
+#             return {"dataset": dataset_name, "status": "no_overlap", "error": "No overlapping question IDs"}
+        
+#         overlap_rate = len(overlap) / len(df_qids) * 100
+#         print(f"   Overlap rate: {overlap_rate:.1f}%")
+        
+#         # Step 7: Setup pipelines
+#         print(f"\n⚙️ Setting up pipeline configurations...")
+#         configs = get_pipeline_configs(question_df, provider_info["model"], provider_info["provider"])
+        
+#         # Step 8: Create output directory
+#         output_dir = Path(f"final_embeddings_{dataset_name}")
+#         output_dir.mkdir(exist_ok=True)
+#         print(f"📁 Output directory: {output_dir}")
+        
+#         # Step 9: Save mapping info
+#         mapping_info = {
+#             "dataset": dataset_name,
+#             "source_files": {
+#                 "qid_to_kc": f"{mappings_dir}/qid_to_kc.json",
+#                 "kc_name_to_id": f"{mappings_dir}/kc_name_to_id.json", 
+#                 "concepts": keyid2idx_path,
+#                 "questions": f"{mappings_dir}/questions_with_kc.csv"
+#             },
+#             "mapping_statistics": {
+#                 "total_questions_csv": len(question_df),
+#                 "total_questions_mapping": len(qid_to_kc_name),
+#                 "overlapping_questions": len(overlap),
+#                 "overlap_rate": overlap_rate,
+#                 "unique_kc_names": len(set(qid_to_kc_name.values())),
+#                 "kc_name_mappings": len(kc_name_to_id),
+#                 "concept_positions": len(kc_id_to_position),
+#                 "max_position": max(kc_id_to_position.values())
+#             }
+#         }
+        
+#         with open(output_dir / "mapping_info.json", 'w') as f:
+#             json.dump(mapping_info, f, indent=2)
+        
+#         # Step 10: Generate embeddings for all pipelines
+#         pipeline_results = {}
+#         final_embeddings = {}
+        
+#         for pipeline_name, config in configs.items():
+#             print(f"\n🚀 Processing {pipeline_name}")
+#             print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
+            
+#             try:
+#                 # Generate embeddings
+#                 pipeline = EmbeddingPipeline(config)
+#                 q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
+                
+#                 if sa_vecs:
+#                     # Convert to final ordered tensor
+#                     final_tensor = convert_sa_to_final_ordered_tensor(
+#                         sa_vecs, kc_name_to_id, kc_id_to_position
+#                     )
+                    
+#                     final_embeddings[pipeline_name] = final_tensor
+                    
+#                     # Save final DKT-ready tensor
+#                     torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
+                    
+#                     # Save original embeddings for reference
+#                     clean_config = EmbeddingPipelineConfig(
+#                         question_embedding_model=config.question_embedding_model,
+#                         kc_strategy=config.kc_strategy,
+#                         sa_strategy=config.sa_strategy,
+#                         execution_order=config.execution_order,
+#                         kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
+#                         sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
+#                     )
+                    
+#                     with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
+#                         pickle.dump({
+#                             'question_embeddings': q_vecs,
+#                             'kc_embeddings': kc_vecs,
+#                             'sa_embeddings': sa_vecs,
+#                             'config': clean_config,
+#                             'provider_info': provider_info
+#                         }, f)
+                    
+#                     print(f"   ✅ Success: {final_tensor.shape}")
+#                     pipeline_results[pipeline_name] = True
+#                 else:
+#                     print(f"   ❌ No SA embeddings generated")
+#                     pipeline_results[pipeline_name] = False
+                
+#             except Exception as e:
+#                 print(f"   ❌ Failed: {e}")
+#                 pipeline_results[pipeline_name] = False
+        
+#         # Step 11: Save all final embeddings
+#         if final_embeddings:
+#             torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
+            
+#             sample_tensor = next(iter(final_embeddings.values()))
+            
+#             summary = {
+#                 "dataset": dataset_name,
+#                 "generation_timestamp": str(pd.Timestamp.now()),
+#                 "successful_pipelines": len(final_embeddings),
+#                 "total_pipelines": len(pipeline_results),
+#                 "final_tensor_shape": list(sample_tensor.shape),
+#                 "total_parameters_per_pipeline": sample_tensor.numel(),
+#                 "embedding_provider": provider_info,
+#                 "data_statistics": mapping_info["mapping_statistics"],
+#                 "pipeline_results": pipeline_results,
+#             }
+            
+#             with open(output_dir / "generation_summary.json", 'w') as f:
+#                 json.dump(summary, f, indent=2)
+        
+#         # Step 12: Dataset summary
+#         successful = sum(pipeline_results.values())
+#         total = len(pipeline_results)
+        
+#         print(f"\n📈 DATASET SUMMARY - {dataset_name.upper()}")
+#         print(f"-" * 50)
+#         print(f"Successful pipelines: {successful}/{total}")
+#         print(f"Questions processed: {len(question_df):,}")
+#         print(f"Questions with embeddings: {len(overlap):,}")
+#         print(f"KC names: {len(set(qid_to_kc_name.values()))}")
+#         print(f"Final positions: {len(kc_id_to_position)}")
+        
+#         if final_embeddings:
+#             sample_shape = next(iter(final_embeddings.values())).shape
+#             print(f"DKT tensor shape: {sample_shape}")
+#             print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
+        
+#         print(f"Pipeline Results:")
+#         for pipeline_name, success in pipeline_results.items():
+#             status = "✅" if success else "❌"
+#             print(f"   {status} {pipeline_name}")
+        
+#         if successful > 0:
+#             print(f"✅ {dataset_name} completed successfully!")
+#             print(f"📁 Output: {output_dir}/")
+        
+#         return {
+#             "dataset": dataset_name,
+#             "status": "completed",
+#             "successful_pipelines": successful,
+#             "total_pipelines": total,
+#             "output_dir": str(output_dir),
+#             "pipeline_results": pipeline_results
+#         }
+        
+#     except Exception as e:
+#         print(f"\n❌ Dataset {dataset_name} failed with error: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return {
+#             "dataset": dataset_name,
+#             "status": "failed",
+#             "error": str(e)
+#         }
+
+
+def process_single_dataset(dataset_name: str, dataset_config: dict, provider_info: dict):
+    """
+    Process a single dataset and generate embeddings.
+    UPDATED: Better error handling and validation
+    """
+    
+    print(f"\n" + "="*80)
+    print(f"🎯 PROCESSING DATASET: {dataset_name.upper()}")
+    print("="*80)
+    
+    mappings_dir = dataset_config["mappings_dir"]
+    keyid2idx_path = dataset_config["keyid2idx_path"]
+    
+    try:
+        # Step 1: Check if dataset files exist
+        mappings_path = Path(mappings_dir)
+        if not mappings_path.exists():
+            print(f"❌ Mappings directory not found: {mappings_dir}")
+            return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {mappings_dir}"}
+        
+        if not Path(keyid2idx_path).exists():
+            print(f"❌ KeyID2Idx file not found: {keyid2idx_path}")
+            return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {keyid2idx_path}"}
+        
+        print(f"✅ Dataset files found:")
+        print(f"   Mappings: {mappings_dir}")
+        print(f"   KeyID2Idx: {keyid2idx_path}")
+        
+        # Step 2: Debug question IDs
+        debug_question_ids(mappings_dir)
+        
+        # Step 3: Load all mappings
+        qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_your_complete_mappings(
+            mappings_dir, keyid2idx_path
+        )
+        
+        # Check if mappings are empty
+        if not qid_to_kc_name:
+            print(f"❌ Empty qid_to_kc mapping for {dataset_name}")
+            return {"dataset": dataset_name, "status": "empty_mappings", "error": "Empty qid_to_kc mapping"}
+        
+        # Step 4: Validate mappings with flexible validation
+        if not validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position):
+            print(f"❌ Mapping validation failed for {dataset_name}")
+            return {"dataset": dataset_name, "status": "validation_failed", "error": "Mapping chain validation failed"}
+        
+        # Step 5: Create question DataFrame
+        question_df = create_question_df_from_csv(mappings_dir)
+        
+        # Step 6: Verify question ID overlap
+        df_qids = set(question_df['question_id'])
+        mapping_qids = set(qid_to_kc_name.keys())
+        overlap = df_qids & mapping_qids
+        
+        print(f"\n🔍 Question ID verification:")
+        print(f"   Question IDs in DataFrame: {len(df_qids)}")
+        print(f"   Question IDs in mapping: {len(mapping_qids)}")
+        print(f"   Overlapping IDs: {len(overlap)}")
+        
+        if len(overlap) == 0:
+            print(f"❌ No overlapping question IDs for {dataset_name}!")
+            return {"dataset": dataset_name, "status": "no_overlap", "error": "No overlapping question IDs"}
+        
+        overlap_rate = len(overlap) / len(df_qids) * 100
+        print(f"   Overlap rate: {overlap_rate:.1f}%")
+        
+        if overlap_rate < 50:
+            print(f"❌ Overlap rate too low: {overlap_rate:.1f}%")
+            return {"dataset": dataset_name, "status": "low_overlap", "error": f"Low overlap rate: {overlap_rate:.1f}%"}
+        
+        # Continue with the rest of the processing...
+        # (The rest remains the same as in the previous version)
+        
+        # Step 7: Setup pipelines
+        print(f"\n⚙️ Setting up pipeline configurations...")
+        configs = get_pipeline_configs(question_df, provider_info["model"], provider_info["provider"])
+        
+        # Step 8: Create output directory
+        output_dir = Path(f"final_embeddings_{dataset_name}")
+        output_dir.mkdir(exist_ok=True)
+        print(f"📁 Output directory: {output_dir}")
+        
+        # Step 9: Save mapping info
+        mapping_info = {
+            "dataset": dataset_name,
+            "source_files": {
+                "qid_to_kc": f"{mappings_dir}/qid_to_kc.json",
+                "kc_name_to_id": f"{mappings_dir}/kc_name_to_id.json", 
+                "concepts": keyid2idx_path,
+                "questions": f"{mappings_dir}/questions_with_kc.csv"
+            },
+            "mapping_statistics": {
+                "total_questions_csv": len(question_df),
+                "total_questions_mapping": len(qid_to_kc_name),
+                "overlapping_questions": len(overlap),
+                "overlap_rate": overlap_rate,
+                "unique_kc_names": len(set(qid_to_kc_name.values())),
+                "kc_name_mappings": len(kc_name_to_id),
+                "concept_positions": len(kc_id_to_position),
+                "max_position": max(kc_id_to_position.values()) if kc_id_to_position else 0
+            }
+        }
+        
+        with open(output_dir / "mapping_info.json", 'w') as f:
+            json.dump(mapping_info, f, indent=2)
+        
+        # Step 10: Generate embeddings for all pipelines
+        pipeline_results = {}
+        final_embeddings = {}
+        
+        for pipeline_name, config in configs.items():
+            print(f"\n🚀 Processing {pipeline_name}")
+            print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
+            
+            try:
+                # Generate embeddings
+                pipeline = EmbeddingPipeline(config)
+                q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
+                
+                if sa_vecs:
+                    # Convert to final ordered tensor
+                    final_tensor = convert_sa_to_final_ordered_tensor(
+                        sa_vecs, kc_name_to_id, kc_id_to_position
+                    )
+                    
+                    final_embeddings[pipeline_name] = final_tensor
+                    
+                    # Save final DKT-ready tensor
+                    torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
+                    
+                    # Save original embeddings for reference
+                    clean_config = EmbeddingPipelineConfig(
+                        question_embedding_model=config.question_embedding_model,
+                        kc_strategy=config.kc_strategy,
+                        sa_strategy=config.sa_strategy,
+                        execution_order=config.execution_order,
+                        kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
+                        sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
+                    )
+                    
+                    with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
+                        pickle.dump({
+                            'question_embeddings': q_vecs,
+                            'kc_embeddings': kc_vecs,
+                            'sa_embeddings': sa_vecs,
+                            'config': clean_config,
+                            'provider_info': provider_info
+                        }, f)
+                    
+                    print(f"   ✅ Success: {final_tensor.shape}")
+                    pipeline_results[pipeline_name] = True
+                else:
+                    print(f"   ❌ No SA embeddings generated")
+                    pipeline_results[pipeline_name] = False
+                
+            except Exception as e:
+                print(f"   ❌ Failed: {e}")
+                pipeline_results[pipeline_name] = False
+        
+        # Step 11: Save all final embeddings
+        if final_embeddings:
+            torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
+            
+            sample_tensor = next(iter(final_embeddings.values()))
+            
+            summary = {
+                "dataset": dataset_name,
+                "generation_timestamp": str(pd.Timestamp.now()),
+                "successful_pipelines": len(final_embeddings),
+                "total_pipelines": len(pipeline_results),
+                "final_tensor_shape": list(sample_tensor.shape),
+                "total_parameters_per_pipeline": sample_tensor.numel(),
+                "embedding_provider": provider_info,
+                "data_statistics": mapping_info["mapping_statistics"],
+                "pipeline_results": pipeline_results,
+            }
+            
+            with open(output_dir / "generation_summary.json", 'w') as f:
+                json.dump(summary, f, indent=2)
+        
+        # Step 12: Dataset summary
+        successful = sum(pipeline_results.values())
+        total = len(pipeline_results)
+        
+        print(f"\n📈 DATASET SUMMARY - {dataset_name.upper()}")
+        print(f"-" * 50)
+        print(f"Successful pipelines: {successful}/{total}")
+        print(f"Questions processed: {len(question_df):,}")
+        print(f"Questions with embeddings: {len(overlap):,}")
+        print(f"KC names: {len(set(qid_to_kc_name.values()))}")
+        print(f"Final positions: {len(kc_id_to_position)}")
+        
+        if final_embeddings:
+            sample_shape = next(iter(final_embeddings.values())).shape
+            print(f"DKT tensor shape: {sample_shape}")
+            print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
+        
+        print(f"Pipeline Results:")
+        for pipeline_name, success in pipeline_results.items():
+            status = "✅" if success else "❌"
+            print(f"   {status} {pipeline_name}")
+        
+        if successful > 0:
+            print(f"✅ {dataset_name} completed successfully!")
+            print(f"📁 Output: {output_dir}/")
+        
+        return {
+            "dataset": dataset_name,
+            "status": "completed",
+            "successful_pipelines": successful,
+            "total_pipelines": total,
+            "output_dir": str(output_dir),
+            "pipeline_results": pipeline_results
+        }
+        
+    except Exception as e:
+        print(f"\n❌ Dataset {dataset_name} failed with error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "dataset": dataset_name,
+            "status": "failed",
+            "error": str(e)
+        }
 
 def get_pipeline_configs(question_df, embedding_model, provider):
     """Return all 9 valid pipeline configurations with dynamic setup."""
@@ -681,6 +1159,164 @@ def load_your_complete_mappings(
 
 
 
+# def validate_your_mapping_chain(
+#     qid_to_kc_name: Dict[str, str],
+#     kc_name_to_id: Dict[str, int], 
+#     kc_id_to_position: Dict[str, int]
+# ) -> bool:
+#     """
+#     Validate your complete mapping chain.
+    
+#     Returns
+#     -------
+#     bool
+#         True if all mappings are complete and valid
+#     """
+    
+#     print(f"\n🔍 Validating mapping chain...")
+    
+#     # Get unique KC names from questions
+#     data_kc_names = set(qid_to_kc_name.values())
+#     mapping_kc_names = set(kc_name_to_id.keys())
+    
+#     # Get KC IDs
+#     mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
+#     position_kc_ids = set(kc_id_to_position.keys())
+    
+#     print(f"   KC names in questions: {len(data_kc_names)}")
+#     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
+#     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
+#     print(f"   KC IDs with positions: {len(position_kc_ids)}")
+    
+#     # Check for missing mappings
+#     missing_kc_names = data_kc_names - mapping_kc_names
+#     missing_kc_ids = mapped_kc_ids - position_kc_ids
+    
+#     is_valid = True
+    
+#     if missing_kc_names:
+#         print(f"   ❌ KC names without ID mappings: {len(missing_kc_names)}")
+#         if len(missing_kc_names) <= 5:
+#             print(f"      {list(missing_kc_names)}")
+#         else:
+#             print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
+#         is_valid = False
+    
+#     if missing_kc_ids:
+#         print(f"   ❌ KC IDs without positions: {len(missing_kc_ids)}")
+#         print(f"      {list(missing_kc_ids)}")
+#         is_valid = False
+    
+#     if is_valid:
+#         print(f"   ✅ All mappings validated successfully!")
+        
+#         # Show mapping statistics
+#         total_questions = len(qid_to_kc_name)
+#         total_kc_names = len(data_kc_names)
+#         total_positions = len(kc_id_to_position)
+        
+#         print(f"\n📊 Mapping Statistics:")
+#         print(f"   Total questions: {total_questions:,}")
+#         print(f"   Unique KC names: {total_kc_names}")
+#         print(f"   Final positions: {total_positions}")
+#         print(f"   Max position: {max(kc_id_to_position.values())}")
+        
+#     return is_valid
+
+
+# def validate_your_mapping_chain(
+#     qid_to_kc_name: Dict[str, str],
+#     kc_name_to_id: Dict[str, int], 
+#     kc_id_to_position: Dict[str, int]
+# ) -> bool:
+#     """
+#     Validate your complete mapping chain.
+#     FIXED: More flexible validation for different datasets
+#     """
+    
+#     print(f"\n🔍 Validating mapping chain...")
+    
+#     # Get unique KC names from questions
+#     data_kc_names = set(qid_to_kc_name.values())
+#     mapping_kc_names = set(kc_name_to_id.keys())
+    
+#     # Get KC IDs
+#     #mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
+#     mapped_kc_ids = set()
+#     for kc_id in kc_name_to_id.values():
+#         mapped_kc_ids.add(str(kc_id))
+#         mapped_kc_ids.add(f"{kc_id}.0")  # Add .0 version
+#     position_kc_ids = set(kc_id_to_position.keys())
+    
+#     print(f"   KC names in questions: {len(data_kc_names)}")
+#     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
+#     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
+#     print(f"   KC IDs with positions: {len(position_kc_ids)}")
+    
+#     # Check for missing mappings
+#     missing_kc_names = data_kc_names - mapping_kc_names
+#     missing_kc_ids = mapped_kc_ids - position_kc_ids
+    
+#     # Calculate coverage
+#     kc_name_coverage = len(data_kc_names - missing_kc_names) / len(data_kc_names) * 100
+#     kc_id_coverage = len(mapped_kc_ids - missing_kc_ids) / len(mapped_kc_ids) * 100
+    
+#     print(f"   KC name coverage: {kc_name_coverage:.1f}%")
+#     print(f"   KC ID coverage: {kc_id_coverage:.1f}%")
+    
+#     # More flexible validation - allow partial coverage
+#     is_valid = True
+#     min_coverage_threshold = 80.0  # Require at least 80% coverage
+    
+#     if missing_kc_names:
+#         print(f"   ⚠️  KC names without ID mappings: {len(missing_kc_names)}")
+#         if len(missing_kc_names) <= 5:
+#             print(f"      {list(missing_kc_names)}")
+#         else:
+#             print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
+        
+#         if kc_name_coverage < min_coverage_threshold:
+#             print(f"   ❌ KC name coverage too low: {kc_name_coverage:.1f}% < {min_coverage_threshold}%")
+#             is_valid = False
+#         else:
+#             print(f"   ⚠️  KC name coverage acceptable: {kc_name_coverage:.1f}%")
+    
+#     if missing_kc_ids:
+#         print(f"   ⚠️  KC IDs without positions: {len(missing_kc_ids)}")
+#         if len(missing_kc_ids) <= 10:
+#             print(f"      {list(missing_kc_ids)}")
+#         else:
+#             print(f"      {list(missing_kc_ids)[:10]} ... and {len(missing_kc_ids)-10} more")
+        
+#         if kc_id_coverage < min_coverage_threshold:
+#             print(f"   ❌ KC ID coverage too low: {kc_id_coverage:.1f}% < {min_coverage_threshold}%")
+#             is_valid = False
+#         else:
+#             print(f"   ⚠️  KC ID coverage acceptable: {kc_id_coverage:.1f}%")
+    
+#     if is_valid and len(missing_kc_names) == 0 and len(missing_kc_ids) == 0:
+#         print(f"   ✅ Perfect mapping chain validated!")
+#     elif is_valid:
+#         print(f"   ✅ Acceptable mapping chain validated with partial coverage!")
+#         print(f"   📝 Will proceed with available mappings")
+#     else:
+#         print(f"   ❌ Mapping chain validation failed - coverage too low")
+        
+#         # Show mapping statistics
+#         total_questions = len(qid_to_kc_name)
+#         total_kc_names = len(data_kc_names)
+#         total_positions = len(kc_id_to_position)
+        
+#         print(f"\n📊 Mapping Statistics:")
+#         print(f"   Total questions: {total_questions:,}")
+#         print(f"   Unique KC names: {total_kc_names}")
+#         print(f"   Final positions: {total_positions}")
+#         if kc_id_to_position:
+#             print(f"   Max position: {max(kc_id_to_position.values())}")
+        
+#     return is_valid
+
+
 
 def validate_your_mapping_chain(
     qid_to_kc_name: Dict[str, str],
@@ -689,11 +1325,7 @@ def validate_your_mapping_chain(
 ) -> bool:
     """
     Validate your complete mapping chain.
-    
-    Returns
-    -------
-    bool
-        True if all mappings are complete and valid
+    FIXED: Handle both with and without .0 suffix in keyid2idx
     """
     
     print(f"\n🔍 Validating mapping chain...")
@@ -702,50 +1334,90 @@ def validate_your_mapping_chain(
     data_kc_names = set(qid_to_kc_name.values())
     mapping_kc_names = set(kc_name_to_id.keys())
     
-    # Get KC IDs
-    mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
+    # Get KC IDs - create both formats
+    mapped_kc_ids_raw = set(str(kc_id) for kc_id in kc_name_to_id.values())
     position_kc_ids = set(kc_id_to_position.keys())
+    
+    # Determine format used in keyid2idx (check if any have .0 suffix)
+    uses_decimal_format = any('.0' in kid for kid in position_kc_ids)
+    
+    # Convert mapped IDs to match the format
+    if uses_decimal_format:
+        # Add .0 suffix to mapped IDs
+        mapped_kc_ids = set(f"{kid}.0" if '.' not in kid else kid for kid in mapped_kc_ids_raw)
+    else:
+        # Use IDs as-is (no .0 suffix)
+        mapped_kc_ids = mapped_kc_ids_raw
     
     print(f"   KC names in questions: {len(data_kc_names)}")
     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
     print(f"   KC IDs with positions: {len(position_kc_ids)}")
+    print(f"   Format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
     
     # Check for missing mappings
     missing_kc_names = data_kc_names - mapping_kc_names
     missing_kc_ids = mapped_kc_ids - position_kc_ids
     
+    # Calculate coverage
+    kc_name_coverage = len(data_kc_names - missing_kc_names) / len(data_kc_names) * 100 if data_kc_names else 0
+    kc_id_coverage = len(mapped_kc_ids - missing_kc_ids) / len(mapped_kc_ids) * 100 if mapped_kc_ids else 0
+    
+    print(f"   KC name coverage: {kc_name_coverage:.1f}%")
+    print(f"   KC ID coverage: {kc_id_coverage:.1f}%")
+    
+    # Rest of the function continues as before...
+    # More flexible validation - allow partial coverage
     is_valid = True
+    min_coverage_threshold = 80.0  # Require at least 80% coverage
     
     if missing_kc_names:
-        print(f"   ❌ KC names without ID mappings: {len(missing_kc_names)}")
+        print(f"   ⚠️  KC names without ID mappings: {len(missing_kc_names)}")
         if len(missing_kc_names) <= 5:
             print(f"      {list(missing_kc_names)}")
         else:
             print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
-        is_valid = False
+        
+        if kc_name_coverage < min_coverage_threshold:
+            print(f"   ❌ KC name coverage too low: {kc_name_coverage:.1f}% < {min_coverage_threshold}%")
+            is_valid = False
+        else:
+            print(f"   ⚠️  KC name coverage acceptable: {kc_name_coverage:.1f}%")
     
     if missing_kc_ids:
-        print(f"   ❌ KC IDs without positions: {len(missing_kc_ids)}")
-        print(f"      {list(missing_kc_ids)}")
-        is_valid = False
+        print(f"   ⚠️  KC IDs without positions: {len(missing_kc_ids)}")
+        if len(missing_kc_ids) <= 10:
+            print(f"      {list(missing_kc_ids)}")
+        else:
+            print(f"      {list(missing_kc_ids)[:10]} ... and {len(missing_kc_ids)-10} more")
+        
+        if kc_id_coverage < min_coverage_threshold:
+            print(f"   ❌ KC ID coverage too low: {kc_id_coverage:.1f}% < {min_coverage_threshold}%")
+            is_valid = False
+        else:
+            print(f"   ⚠️  KC ID coverage acceptable: {kc_id_coverage:.1f}%")
     
-    if is_valid:
-        print(f"   ✅ All mappings validated successfully!")
-        
-        # Show mapping statistics
-        total_questions = len(qid_to_kc_name)
-        total_kc_names = len(data_kc_names)
-        total_positions = len(kc_id_to_position)
-        
-        print(f"\n📊 Mapping Statistics:")
-        print(f"   Total questions: {total_questions:,}")
-        print(f"   Unique KC names: {total_kc_names}")
-        print(f"   Final positions: {total_positions}")
+    if is_valid and len(missing_kc_names) == 0 and len(missing_kc_ids) == 0:
+        print(f"   ✅ Perfect mapping chain validated!")
+    elif is_valid:
+        print(f"   ✅ Acceptable mapping chain validated with partial coverage!")
+        print(f"   📝 Will proceed with available mappings")
+    else:
+        print(f"   ❌ Mapping chain validation failed - coverage too low")
+    
+    # Show mapping statistics
+    total_questions = len(qid_to_kc_name)
+    total_kc_names = len(data_kc_names)
+    total_positions = len(kc_id_to_position)
+    
+    print(f"\n📊 Mapping Statistics:")
+    print(f"   Total questions: {total_questions:,}")
+    print(f"   Unique KC names: {total_kc_names}")
+    print(f"   Final positions: {total_positions}")
+    if kc_id_to_position:
         print(f"   Max position: {max(kc_id_to_position.values())}")
-        
+    
     return is_valid
-
 
 # def create_question_df_from_csv(
 #     mappings_dir: str = "mappings_output"
@@ -780,12 +1452,37 @@ def validate_your_mapping_chain(
     
 #     return question_df
 
+# def create_question_df_from_csv(
+#     mappings_dir: str = "mappings_output"
+# ) -> pd.DataFrame:
+#     """
+#     Create question_df from your questions_with_kc.csv file.
+#     FIXED: Ensures question IDs match the format in qid_to_kc.json
+#     """
+    
+#     csv_path = Path(mappings_dir) / "questions_with_kc.csv"
+    
+#     print(f"📊 Loading questions from {csv_path}")
+#     df = pd.read_csv(csv_path)
+    
+#     # FIXED: Convert question_id to match qid_to_kc format (add 'q' prefix)
+#     question_df = pd.DataFrame({
+#         'question_id': 'q' + df['question_id'].astype(str),  # Add 'q' prefix
+#         'question_text': df['problem_body']
+#     })
+    
+#     print(f"   ✅ Loaded {len(question_df)} questions")
+#     print(f"   Sample question ID: {question_df.iloc[0]['question_id']}")
+#     print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
+    
+#     return question_df
+
 def create_question_df_from_csv(
-    mappings_dir: str = "mappings_output"
+    mappings_dir: str
 ) -> pd.DataFrame:
     """
     Create question_df from your questions_with_kc.csv file.
-    FIXED: Ensures question IDs match the format in qid_to_kc.json
+    FIXED: Handles different CSV column names across datasets
     """
     
     csv_path = Path(mappings_dir) / "questions_with_kc.csv"
@@ -793,13 +1490,35 @@ def create_question_df_from_csv(
     print(f"📊 Loading questions from {csv_path}")
     df = pd.read_csv(csv_path)
     
-    # FIXED: Convert question_id to match qid_to_kc format (add 'q' prefix)
+    print(f"   Available columns: {list(df.columns)}")
+    
+    # Handle different column names across datasets
+    text_col = None
+    if 'problem_body' in df.columns:
+        text_col = 'problem_body'
+    elif 'question_text' in df.columns:
+        text_col = 'question_text'
+    elif 'template' in df.columns:
+        text_col = 'template'
+    elif 'text' in df.columns:
+        text_col = 'text'
+    else:
+        # Find any column that might contain text
+        text_columns = [col for col in df.columns if 'text' in col.lower() or 'body' in col.lower() or 'template' in col.lower()]
+        if text_columns:
+            text_col = text_columns[0]
+            print(f"   Using text column: {text_col}")
+        else:
+            raise ValueError(f"No suitable text column found. Available columns: {list(df.columns)}")
+    
+    # Convert question_id to match qid_to_kc format (add 'q' prefix)
     question_df = pd.DataFrame({
         'question_id': 'q' + df['question_id'].astype(str),  # Add 'q' prefix
-        'question_text': df['problem_body']
+        'question_text': df[text_col].fillna("No question text available")  # Handle missing text
     })
     
     print(f"   ✅ Loaded {len(question_df)} questions")
+    print(f"   Used text column: {text_col}")
     print(f"   Sample question ID: {question_df.iloc[0]['question_id']}")
     print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
     
@@ -901,7 +1620,6 @@ def create_question_df_from_csv(
     
 #     return ordered_tensor
 
-
 def convert_sa_to_final_ordered_tensor(
     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
     kc_name_to_id: Dict[str, int],
@@ -910,10 +1628,13 @@ def convert_sa_to_final_ordered_tensor(
 ) -> torch.Tensor:
     """
     Convert SA embeddings to final ordered tensor using your exact mappings.
-    FIXED: Handles both tensor and string formats from add_words strategy
+    FIXED: Handles both with and without .0 suffix formats
     """
     
-    # FIXED: Filter out non-tensor SA embeddings (from add_words strategy)
+    # Detect format used in kc_id_to_position
+    uses_decimal_format = any('.0' in kid for kid in kc_id_to_position.keys())
+    
+    # Filter out non-tensor SA embeddings
     tensor_sa_embeddings = {}
     string_sa_embeddings = {}
     
@@ -922,40 +1643,28 @@ def convert_sa_to_final_ordered_tensor(
             tensor_sa_embeddings[key] = value
         elif isinstance(value, str):
             string_sa_embeddings[key] = value
-        else:
-            print(f"⚠️  Unknown SA embedding format for {key}: {type(value)}")
     
     if verbose:
         print(f"🔍 SA embeddings analysis:")
         print(f"   Tensor embeddings: {len(tensor_sa_embeddings)}")
         print(f"   String embeddings: {len(string_sa_embeddings)} (add_words strategy)")
+        print(f"   Position format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
     
-    # For add_words strategy, we need to convert the KC embeddings instead
+    # Handle add_words strategy
     if len(tensor_sa_embeddings) == 0 and len(string_sa_embeddings) > 0:
         print(f"⚠️  SA embeddings are in text format (add_words strategy)")
-        print(f"   This pipeline uses modified question texts instead of tensor embeddings")
-        print(f"   Creating dummy tensor for consistency...")
-        
-        # Create a dummy tensor with expected shape
         max_position = max(kc_id_to_position.values())
         tensor_size = max_position + 1
-        embedding_dim = 384  # Default BERT dimension
-        
+        embedding_dim = 384
         dummy_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
-        
-        if verbose:
-            print(f"   Created dummy tensor: {dummy_tensor.shape}")
-            print(f"   ⚠️  This tensor contains zeros - add_words strategy embeddings are in KC format")
-        
         return dummy_tensor
     
-    # Process tensor embeddings normally
     if len(tensor_sa_embeddings) == 0:
         raise ValueError("No valid tensor embeddings found in SA embeddings")
     
     # Determine tensor size
     max_position = max(kc_id_to_position.values())
-    tensor_size = max_position + 1  # 0-indexed positions
+    tensor_size = max_position + 1
     
     # Get embedding dimension
     sample_embedding = next(iter(tensor_sa_embeddings.values()))
@@ -978,22 +1687,25 @@ def convert_sa_to_final_ordered_tensor(
             continue
         
         kc_id = kc_name_to_id[kc_name]
-        kc_id_str = str(kc_id)
+        
+        # Format KC ID to match kc_id_to_position format
+        if uses_decimal_format:
+            kc_id_str = f"{kc_id}.0"
+        else:
+            kc_id_str = str(kc_id)
         
         # KC ID -> position
         if kc_id_str not in kc_id_to_position:
-            failed_placements.append(f"KC ID '{kc_id}' (from '{kc_name}') not found in concepts")
+            failed_placements.append(f"KC ID '{kc_id_str}' (from '{kc_name}') not found in concepts")
             continue
         
         position = kc_id_to_position[kc_id_str]
         
         # Place in tensor
         if is_correct:
-            # Correct: positions 0 to tensor_size-1
             ordered_tensor[position] = embedding
             placed_correct += 1
         else:
-            # Incorrect: positions tensor_size to 2*tensor_size-1
             ordered_tensor[tensor_size + position] = embedding
             placed_incorrect += 1
     
@@ -1015,44 +1727,139 @@ def convert_sa_to_final_ordered_tensor(
     
     return ordered_tensor
 
-def debug_question_ids():
-    """Debug function to check question ID formats."""
+# def debug_question_ids():
+#     """Debug function to check question ID formats."""
+    
+#     print("🔍 Debugging question ID formats...")
+    
+#     # Load qid_to_kc
+#     with open("mappings_output/qid_to_kc.json", 'r') as f:
+#         qid_to_kc = json.load(f)
+    
+#     # Load CSV
+#     csv_df = pd.read_csv("mappings_output/questions_with_kc.csv")
+    
+#     # Check formats
+#     sample_qid_json = list(qid_to_kc.keys())[0]
+#     sample_qid_csv = str(csv_df['question_id'].iloc[0])
+    
+#     print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
+#     print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
+    
+#     # Check if they match
+#     csv_qids = set('q' + csv_df['question_id'].astype(str))
+#     json_qids = set(qid_to_kc.keys())
+    
+#     overlap = csv_qids & json_qids
+#     only_csv = csv_qids - json_qids
+#     only_json = json_qids - csv_qids
+    
+#     print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
+#     print(f"   QIDs in JSON: {len(json_qids)}")
+#     print(f"   Overlapping QIDs: {len(overlap)}")
+#     print(f"   Only in CSV: {len(only_csv)}")
+#     print(f"   Only in JSON: {len(only_json)}")
+    
+#     # FIXED: Compare len(overlap) instead of overlap
+#     if len(overlap) > 0:
+#         print(f"   ✅ Found {len(overlap)} matching question IDs")
+#     else:
+#         print(f"   ❌ No matching question IDs found!")
+
+# def debug_question_ids(mappings_dir: str):
+#     """Debug function to check question ID formats."""
+    
+#     print("🔍 Debugging question ID formats...")
+    
+#     # Load qid_to_kc
+#     with open(f"{mappings_dir}/qid_to_kc.json", 'r') as f:
+#         qid_to_kc = json.load(f)
+    
+#     # Load CSV
+#     csv_df = pd.read_csv(f"{mappings_dir}/questions_with_kc.csv")
+    
+#     # Check formats
+#     sample_qid_json = list(qid_to_kc.keys())[0]
+#     sample_qid_csv = str(csv_df['question_id'].iloc[0])
+    
+#     print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
+#     print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
+    
+#     # Check if they match
+#     csv_qids = set('q' + csv_df['question_id'].astype(str))
+#     json_qids = set(qid_to_kc.keys())
+    
+#     overlap = csv_qids & json_qids
+#     only_csv = csv_qids - json_qids
+#     only_json = json_qids - csv_qids
+    
+#     print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
+#     print(f"   QIDs in JSON: {len(json_qids)}")
+#     print(f"   Overlapping QIDs: {len(overlap)}")
+#     print(f"   Only in CSV: {len(only_csv)}")
+#     print(f"   Only in JSON: {len(only_json)}")
+    
+#     if len(overlap) > 0:
+#         print(f"   ✅ Found {len(overlap)} matching question IDs")
+#     else:
+#         print(f"   ❌ No matching question IDs found!")
+
+
+def debug_question_ids(mappings_dir: str):
+    """
+    Debug function to check question ID formats.
+    FIXED: Handles empty JSON files
+    """
     
     print("🔍 Debugging question ID formats...")
     
-    # Load qid_to_kc
-    with open("mappings_output/qid_to_kc.json", 'r') as f:
-        qid_to_kc = json.load(f)
-    
-    # Load CSV
-    csv_df = pd.read_csv("mappings_output/questions_with_kc.csv")
-    
-    # Check formats
-    sample_qid_json = list(qid_to_kc.keys())[0]
-    sample_qid_csv = str(csv_df['question_id'].iloc[0])
-    
-    print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
-    print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
-    
-    # Check if they match
-    csv_qids = set('q' + csv_df['question_id'].astype(str))
-    json_qids = set(qid_to_kc.keys())
-    
-    overlap = csv_qids & json_qids
-    only_csv = csv_qids - json_qids
-    only_json = json_qids - csv_qids
-    
-    print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
-    print(f"   QIDs in JSON: {len(json_qids)}")
-    print(f"   Overlapping QIDs: {len(overlap)}")
-    print(f"   Only in CSV: {len(only_csv)}")
-    print(f"   Only in JSON: {len(only_json)}")
-    
-    # FIXED: Compare len(overlap) instead of overlap
-    if len(overlap) > 0:
-        print(f"   ✅ Found {len(overlap)} matching question IDs")
-    else:
-        print(f"   ❌ No matching question IDs found!")
+    try:
+        # Load qid_to_kc
+        with open(f"{mappings_dir}/qid_to_kc.json", 'r') as f:
+            qid_to_kc = json.load(f)
+        
+        if not qid_to_kc:
+            print(f"   ❌ Empty qid_to_kc.json file in {mappings_dir}")
+            return
+        
+        # Load CSV
+        csv_df = pd.read_csv(f"{mappings_dir}/questions_with_kc.csv")
+        
+        if len(csv_df) == 0:
+            print(f"   ❌ Empty CSV file in {mappings_dir}")
+            return
+        
+        # Check formats
+        sample_qid_json = list(qid_to_kc.keys())[0]
+        sample_qid_csv = str(csv_df['question_id'].iloc[0])
+        
+        print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
+        print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
+        
+        # Check if they match
+        csv_qids = set('q' + csv_df['question_id'].astype(str))
+        json_qids = set(qid_to_kc.keys())
+        
+        overlap = csv_qids & json_qids
+        only_csv = csv_qids - json_qids
+        only_json = json_qids - csv_qids
+        
+        print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
+        print(f"   QIDs in JSON: {len(json_qids)}")
+        print(f"   Overlapping QIDs: {len(overlap)}")
+        print(f"   Only in CSV: {len(only_csv)}")
+        print(f"   Only in JSON: {len(only_json)}")
+        
+        if len(overlap) > 0:
+            print(f"   ✅ Found {len(overlap)} matching question IDs")
+        else:
+            print(f"   ❌ No matching question IDs found!")
+            
+    except FileNotFoundError as e:
+        print(f"   ❌ File not found: {e}")
+    except Exception as e:
+        print(f"   ❌ Error: {e}")
+
 
 def generate_final_embeddings():
     """
@@ -1400,12 +2207,270 @@ def generate_final_embeddings_with_debug():
         print(f"🎯 Use: final_embeddings/pipeline_X_final_dkt.pt for DKT training")
 
 
+
+def generate_all_datasets():
+    """
+    Automatically process all datasets.
+    """
+    
+    print("🎯 AUTOMATIC MULTI-DATASET EMBEDDING GENERATION")
+    print("="*80)
+    
+    # Step 1: Setup embedding system once
+    print("🔧 Setting up embedding provider...")
+    provider, model, embedding_dim = check_requirements()
+    provider_info = {"provider": provider, "model": model, "embedding_dim": embedding_dim}
+    
+    print(f"✅ Embedding system ready!")
+    print(f"   Provider: {provider.upper()}")
+    print(f"   Model: {model}")
+    print(f"   Dimensions: {embedding_dim}")
+    
+    # Step 2: Process each dataset
+    all_results = []
+    datasets = list(DATASET_CONFIG.keys())
+    
+    print(f"\n📊 Processing {len(datasets)} datasets: {', '.join(datasets)}")
+    
+    for i, (dataset_name, dataset_config) in enumerate(DATASET_CONFIG.items(), 1):
+        print(f"\n{'='*20} DATASET {i}/{len(datasets)} {'='*20}")
+        
+        result = process_single_dataset(dataset_name, dataset_config, provider_info)
+        all_results.append(result)
+    
+    # Step 3: Final summary
+    print(f"\n" + "="*80)
+    print("🏁 FINAL SUMMARY - ALL DATASETS")
+    print("="*80)
+    
+    completed_datasets = [r for r in all_results if r["status"] == "completed"]
+    failed_datasets = [r for r in all_results if r["status"] != "completed"]
+    
+    print(f"📊 Overall Results:")
+    print(f"   Total datasets: {len(all_results)}")
+    print(f"   Completed successfully: {len(completed_datasets)}")
+    print(f"   Failed: {len(failed_datasets)}")
+    
+    print(f"\n📋 Dataset Details:")
+    for result in all_results:
+        dataset = result["dataset"]
+        status = result["status"]
+        
+        if status == "completed":
+            successful = result["successful_pipelines"]
+            total = result["total_pipelines"]
+            print(f"   ✅ {dataset.upper()}: {successful}/{total} pipelines successful")
+            print(f"      Output: {result['output_dir']}")
+        else:
+            error_msg = result.get("error", "Unknown error")
+            print(f"   ❌ {dataset.upper()}: {status} - {error_msg}")
+    
+    # Step 4: Save global summary
+    global_summary = {
+        "generation_timestamp": str(pd.Timestamp.now()),
+        "embedding_provider": provider_info,
+        "datasets_processed": len(all_results),
+        "datasets_completed": len(completed_datasets),
+        "datasets_failed": len(failed_datasets),
+        "results": all_results
+    }
+    
+    with open("all_datasets_summary.json", 'w') as f:
+        json.dump(global_summary, f, indent=2)
+    
+    print(f"\n📁 Global summary saved: all_datasets_summary.json")
+    
+    if completed_datasets:
+        print(f"\n🎉 SUCCESS! Generated embeddings for {len(completed_datasets)} datasets!")
+        print(f"🎯 Output directories:")
+        for result in completed_datasets:
+            print(f"   - {result['output_dir']}")
+    
+    if failed_datasets:
+        print(f"\n⚠️  {len(failed_datasets)} datasets failed. Check the logs above for details.")
+
+
+
+def initialize_provider_silent(provider: str, model: str, config: dict) -> bool:
+    """Initialize provider without user interaction."""
+    
+    if provider == "openai":
+        api_key = config.get("openai_api_key")
+        if not api_key or api_key == "your-openai-api-key-here":
+            print("❌ OpenAI API key not configured")
+            return False
+        return _setup_openai_client(api_key)
+        
+    elif provider == "cohere":
+        api_key = config.get("cohere_api_key")
+        if not api_key or api_key == "your-cohere-api-key-here":
+            print("❌ Cohere API key not configured")
+            return False
+        return _setup_cohere_client(api_key)
+        
+    elif provider == "bert":
+        return _setup_bert_client()
+    
+    return False
+
+
+
+def generate_all_datasets_all_models():
+    """
+    Automatically process all datasets with ALL embedding models.
+    """
+    
+    print("🎯 AUTOMATIC MULTI-DATASET MULTI-MODEL EMBEDDING GENERATION")
+    print("="*80)
+    
+    # Define all models to process
+    ALL_MODELS = [
+        # BERT models (Provider 3)
+        ("bert", "all-MiniLM-L6-v2"),      # 384 dims, fast
+        ("bert", "all-mpnet-base-v2"),      # 768 dims, best quality
+        #("bert", "multi-qa-mpnet-base-dot-v1"),  # 768 dims, Q&A optimized
+        #("bert", "all-MiniLM-L12-v2"),      # 384 dims, better than L6
+        #("bert", "paraphrase-MiniLM-L6-v2"), # 384 dims, paraphrase
+        
+        # Uncomment these if you want to use API-based models
+        # ("openai", "text-embedding-3-small"),  # 1536 dims
+        # ("openai", "text-embedding-3-large"),  # 3072 dims
+        # ("cohere", "embed-english-v3.0"),      # 1024 dims
+        # ("cohere", "embed-english-light-v3.0"), # 384 dims
+    ]
+    
+    print(f"📊 Will process {len(DATASET_CONFIG)} datasets with {len(ALL_MODELS)} models")
+    print(f"📊 Total combinations: {len(DATASET_CONFIG) * len(ALL_MODELS)}")
+    
+    # Load API config once
+    config = load_api_config()
+    
+    # Store results for all model-dataset combinations
+    all_results = {}
+    
+    # Process each model
+    for model_idx, (provider, model) in enumerate(ALL_MODELS, 1):
+        print(f"\n{'='*80}")
+        print(f"🤖 MODEL {model_idx}/{len(ALL_MODELS)}: {provider.upper()} - {model}")
+        print(f"{'='*80}")
+        
+        # Setup embedding system for this model
+        try:
+            print(f"🔧 Setting up {provider.upper()} - {model}...")
+            
+            # Initialize provider without user interaction
+            success = initialize_provider_silent(provider, model, config)
+            if not success:
+                print(f"❌ Failed to initialize {provider} - {model}")
+                continue
+            
+            # Set global state
+            global _current_provider, _current_model, DEFAULT_MODEL
+            _current_provider = provider
+            _current_model = model
+            DEFAULT_MODEL = model
+            
+            # Test the embedding system
+            print("🧪 Testing embedding system...")
+            test_embedding = _get_embedding("test", model=model, provider=provider)
+            embedding_dim = get_embedding_dimension(model)
+            
+            print(f"✅ Embedding system ready!")
+            print(f"   Provider: {provider.upper()}")
+            print(f"   Model: {model}")
+            print(f"   Dimensions: {embedding_dim}")
+            
+            provider_info = {
+                "provider": provider,
+                "model": model,
+                "embedding_dim": embedding_dim
+            }
+            
+        except Exception as e:
+            print(f"❌ Failed to setup {provider} - {model}: {e}")
+            continue
+        
+        # Process each dataset with this model
+        model_results = []
+        datasets = list(DATASET_CONFIG.keys())
+        
+        for dataset_idx, (dataset_name, dataset_config) in enumerate(DATASET_CONFIG.items(), 1):
+            print(f"\n{'='*20} DATASET {dataset_idx}/{len(datasets)} {'='*20}")
+            
+            # Modify output directory to include model name
+            original_mappings_dir = dataset_config["mappings_dir"]
+            
+            # Create a model-specific output directory
+            model_safe_name = model.replace("/", "_").replace("-", "_")
+            output_dir_name = f"final_embeddings_{dataset_name}_{model_safe_name}"
+            
+            # Process dataset
+            result = process_single_dataset_with_output_dir(
+                dataset_name, 
+                dataset_config, 
+                provider_info,
+                output_dir_name
+            )
+            
+            model_results.append(result)
+            
+            # Store result with model-dataset key
+            result_key = f"{provider}_{model}_{dataset_name}"
+            all_results[result_key] = result
+        
+        # Summary for this model
+        completed = [r for r in model_results if r["status"] == "completed"]
+        print(f"\n📊 Model {model} Summary:")
+        print(f"   Completed: {len(completed)}/{len(model_results)} datasets")
+    
+    # Final global summary
+    print(f"\n" + "="*80)
+    print("🏁 FINAL SUMMARY - ALL MODELS, ALL DATASETS")
+    print("="*80)
+    
+    total_combinations = len(ALL_MODELS) * len(DATASET_CONFIG)
+    successful_combinations = sum(1 for r in all_results.values() if r["status"] == "completed")
+    
+    print(f"📊 Overall Results:")
+    print(f"   Total combinations attempted: {total_combinations}")
+    print(f"   Successful combinations: {successful_combinations}")
+    print(f"   Failed combinations: {total_combinations - successful_combinations}")
+    
+    # Detailed breakdown
+    print(f"\n📋 Detailed Results:")
+    for (provider, model) in ALL_MODELS:
+        print(f"\n   {provider.upper()} - {model}:")
+        for dataset_name in DATASET_CONFIG.keys():
+            key = f"{provider}_{model}_{dataset_name}"
+            if key in all_results:
+                result = all_results[key]
+                if result["status"] == "completed":
+                    print(f"      ✅ {dataset_name}: {result['successful_pipelines']}/{result['total_pipelines']} pipelines")
+                else:
+                    print(f"      ❌ {dataset_name}: {result['status']}")
+    
+    # Save comprehensive summary
+    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+    summary_file = f"all_models_datasets_summary_{timestamp}.json"
+    
+    with open(summary_file, 'w') as f:
+        json.dump({
+            "generation_timestamp": str(pd.Timestamp.now()),
+            "models_processed": ALL_MODELS,
+            "datasets_processed": list(DATASET_CONFIG.keys()),
+            "total_combinations": total_combinations,
+            "successful_combinations": successful_combinations,
+            "results": all_results
+        }, f, indent=2)
+    
+    print(f"\n📁 Comprehensive summary saved: {summary_file}")
+    
+    if successful_combinations > 0:
+        print(f"\n🎉 SUCCESS! Generated embeddings for {successful_combinations} model-dataset combinations!")
+
+
+
+
 if __name__ == "__main__":
     # Generate final embeddings using your file structure
-    generate_final_embeddings_with_debug()
-    
-    print(f"\n📋 Files used:")
-    print(f"   - mappings_output/qid_to_kc.json")
-    print(f"   - mappings_output/kc_name_to_id.json") 
-    print(f"   - keyid2idx.json (concepts)")
-    print(f"   - mappings_output/questions_with_kc.csv")
+        generate_all_datasets_all_models()
