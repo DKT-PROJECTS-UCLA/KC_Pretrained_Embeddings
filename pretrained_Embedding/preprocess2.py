@@ -52,7 +52,12 @@ def create_mappings_from_question_csv(
         # Remove 'q' prefix if present
         question_df['numeric_id'] = question_df['question_id'].str.replace('q', '').astype(int)
     else:
+        # Convert to numeric and handle floats (425.0 -> 425)
         question_df['numeric_id'] = pd.to_numeric(question_df['question_id'], errors='coerce')
+        # Convert float to int if they're whole numbers
+        if question_df['numeric_id'].notna().any():
+            question_df['numeric_id'] = question_df['numeric_id'].fillna(-1).astype(int)
+            question_df.loc[question_df['numeric_id'] == -1, 'numeric_id'] = None
     
     # Load ASSIST dataset
     logger.info(f"Loading ASSIST data from {assist_path}")
@@ -78,6 +83,13 @@ def create_mappings_from_question_csv(
     
     # Clean skill data
     assist_df['problem_id'] = pd.to_numeric(assist_df['problem_id'], errors='coerce')
+    # Convert float problem IDs to int if they're whole numbers
+    if assist_df['problem_id'].notna().any():
+        # Check if all non-null values are whole numbers
+        non_null_problems = assist_df['problem_id'].dropna()
+        if (non_null_problems == non_null_problems.astype(int)).all():
+            assist_df['problem_id'] = assist_df['problem_id'].fillna(-1).astype(int)
+            assist_df.loc[assist_df['problem_id'] == -1, 'problem_id'] = None
     
     # Find and rename skill column
     skill_id_col = None
@@ -86,10 +98,22 @@ def create_mappings_from_question_csv(
             skill_id_col = col
             break
     
-    if skill_id_col and skill_id_col != 'skill_id':
+    # Special handling for ASSIST 2017 where 'skill' IS the KC name (no skill_id)
+    if skill_id_col == 'skill' and 'skill_id' not in available_columns:
+        logger.info("ASSIST 2017 format detected: 'skill' column contains KC names directly")
+        # Don't rename 'skill' column, keep it as is
+        # Create a synthetic skill_id for internal processing
+        unique_skills = assist_df['skill'].dropna().unique()
+        skill_to_id = {skill: idx for idx, skill in enumerate(unique_skills, start=1)}
+        assist_df['skill_id'] = assist_df['skill'].map(skill_to_id)
+        assist_df['skill_name'] = assist_df['skill']  # skill column contains the names
+        logger.info(f"Found {len(unique_skills)} unique skills in ASSIST 2017")
+        logger.info(f"Sample skills: {list(unique_skills[:5])}")
+    elif skill_id_col and skill_id_col != 'skill_id':
         assist_df = assist_df.rename(columns={skill_id_col: 'skill_id'})
-    
-    assist_df['skill_id'] = pd.to_numeric(assist_df['skill_id'], errors='coerce')
+        assist_df['skill_id'] = pd.to_numeric(assist_df['skill_id'], errors='coerce')
+    elif skill_id_col is None:
+        logger.warning("No skill column found!")
     
     # Get skill mappings for problems in question CSV
     valid_problem_ids = question_df['numeric_id'].dropna().unique()
@@ -97,6 +121,12 @@ def create_mappings_from_question_csv(
     
     # Filter ASSIST to only these problems
     assist_filtered = assist_df[assist_df['problem_id'].isin(valid_problem_ids)]
+    
+    # For ASSIST 2017, ensure skill columns are properly set in filtered data too
+    if 'skill' in available_columns and 'skill_id' not in available_columns:
+        if 'skill_id' in assist_df.columns and 'skill_id' not in assist_filtered.columns:
+            assist_filtered['skill_id'] = assist_filtered['skill'].map(skill_to_id)
+            assist_filtered['skill_name'] = assist_filtered['skill']
     
     # Check which columns are available
     available_columns = assist_df.columns.tolist()
@@ -113,10 +143,31 @@ def create_mappings_from_question_csv(
             break
     
     # Find skill name column (might not exist)
-    for col in ['skill_name', 'skill_name', 'problem_name']:
+    for col in ['skill_name', 'skill_name', 'problem_name', 'skill']:
         if col in available_columns:
             skill_name_col = col
             break
+    
+    # Special handling for ASSIST 2017 where 'skill' column contains the skill names
+    if 'skill' in available_columns and skill_name_col == 'skill':
+        logger.info("ASSIST 2017 detected: 'skill' column contains skill names")
+        # For ASSIST 2017, the 'skill' column has the actual skill names
+        # We'll create a skill_id based on unique skill names
+        assist_df['skill_name'] = assist_df['skill']
+        assist_filtered['skill_name'] = assist_filtered['skill']
+        
+        # Create skill IDs for unique skill names
+        unique_skills = assist_df['skill'].dropna().unique()
+        skill_to_id = {skill: idx for idx, skill in enumerate(unique_skills, start=1)}
+        assist_df['skill_id'] = assist_df['skill'].map(skill_to_id)
+        assist_filtered['skill_id'] = assist_filtered['skill'].map(skill_to_id)
+        
+        skill_id_col = 'skill_id'
+        skill_name_col = 'skill_name'
+        
+        # Debug: Show sample of skill mappings
+        logger.info(f"Created {len(skill_to_id)} skill IDs from skill names")
+        logger.info(f"Sample skill mappings: {dict(list(skill_to_id.items())[:5])}")
     
     if not skill_id_col:
         raise ValueError(f"No skill ID column found. Available columns: {available_columns}")
@@ -125,14 +176,14 @@ def create_mappings_from_question_csv(
     logger.info(f"Using skill name column: {skill_name_col if skill_name_col else 'None - will use skill IDs'}")
     
     # Rename columns for consistency
-    if skill_id_col != 'skill_id':
+    if skill_id_col != 'skill_id' and 'skill' not in available_columns:
         assist_df = assist_df.rename(columns={skill_id_col: 'skill_id'})
         assist_filtered = assist_filtered.rename(columns={skill_id_col: 'skill_id'})
     
-    if skill_name_col and skill_name_col != 'skill_name':
+    if skill_name_col and skill_name_col != 'skill_name' and 'skill' not in available_columns:
         assist_df = assist_df.rename(columns={skill_name_col: 'skill_name'})
         assist_filtered = assist_filtered.rename(columns={skill_name_col: 'skill_name'})
-    elif not skill_name_col:
+    elif not skill_name_col and 'skill' not in available_columns:
         # Create skill_name column with placeholder values
         assist_df['skill_name'] = None
         assist_filtered['skill_name'] = None
@@ -141,10 +192,21 @@ def create_mappings_from_question_csv(
     group_cols = ['skill_id', 'skill_name'] if 'skill_name' in assist_filtered.columns else ['skill_id']
     problem_skill_map = assist_filtered.groupby('problem_id').first()[group_cols].reset_index()
     
+    # Debug: Check what we have in problem_skill_map
+    logger.info(f"Problem-skill map columns: {problem_skill_map.columns.tolist()}")
+    logger.info(f"Sample problem-skill mappings:")
+    logger.info(problem_skill_map.head())
+    
     # Create complete skill reference (all unique skills)
     skill_cols = ['skill_id', 'skill_name'] if 'skill_name' in assist_df.columns else ['skill_id']
     all_skills = assist_df[skill_cols].drop_duplicates()
     all_skills = all_skills.dropna(subset=['skill_id'])
+    
+    # Debug: Check skill data
+    logger.info(f"Total unique skills: {len(all_skills)}")
+    if 'skill_name' in all_skills.columns:
+        logger.info(f"Sample skills with names:")
+        logger.info(all_skills[all_skills['skill_name'].notna()].head())
     
     # Initialize mappings
     kc_name_to_id = {}
@@ -152,7 +214,11 @@ def create_mappings_from_question_csv(
     
     # Process all skills to create kc_name_to_id
     for _, row in all_skills.iterrows():
-        skill_id = int(row['skill_id'])
+        if pd.notna(row.get('skill_id')):
+            skill_id = int(row['skill_id'])
+        else:
+            continue
+            
         skill_name = row.get('skill_name', None)
         
         # Determine skill name
@@ -222,6 +288,12 @@ def create_mappings_from_question_csv(
     
     # Add KC name to dataframe
     question_df['kc_name'] = question_df['skill_id'].map(kc_id_to_name)
+    
+    # Debug: Check if KC names are being mapped
+    logger.info(f"\nFinal question_df columns: {question_df.columns.tolist()}")
+    logger.info(f"Questions with KC names: {question_df['kc_name'].notna().sum()}")
+    logger.info(f"Sample of final data with KC names:")
+    logger.info(question_df[['question_id', 'skill_id', 'kc_name', 'skill_name']].head(10))
     
     # Save outputs
     os.makedirs(save_dir, exist_ok=True)
@@ -347,7 +419,7 @@ if __name__ == "__main__":
     
     # Run preprocess.py first
     print("Running preprocess.py...")
-    # subprocess.run(['python', 'preprocess.py'])
+    #subprocess.run(['python', 'preprocess.py'])
     print("Preprocess.py completed!\n")
     
     # Define the lists

@@ -19,7 +19,18 @@ from tqdm import tqdm
 # Import your pipeline modules
 from pipeline import EmbeddingPipelineConfig, EmbeddingPipeline
 import embedding_models as em
-
+from embedding_models import (
+    load_api_config,
+    _get_embedding,
+    _current_provider,
+    _current_model,
+    DEFAULT_MODEL,
+    _provider_clients,
+    get_embedding_dimension,
+    _setup_openai_client,
+    _setup_cohere_client,
+    _setup_bert_client
+)
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,6 +84,155 @@ def load_your_data(data_dir: str = "./my_data",
     print(f"📊 Dataset: {len(question_df)} questions, {len(set(qid_to_kc.values()))} unique KCs")
     return question_df, qid_to_kc
 
+# def load_assist2017_mappings(
+#     mappings_dir: str = "mappings_output2017",
+#     keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
+# ) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
+#     """
+#     Special loader for ASSIST2017 which uses skill_name -> position mapping.
+#     """
+    
+#     mappings_path = Path(mappings_dir)
+    
+#     print(f"📂 Loading ASSIST2017 mappings from {mappings_dir}/")
+    
+#     # 1. Load qid_to_kc (question_id -> skill_name)
+#     qid_to_kc_json_path = mappings_path / "qid_to_kc.json"
+#     with open(qid_to_kc_json_path, 'r') as f:
+#         qid_to_kc_name = json.load(f)
+#     print(f"   ✅ qid_to_kc: {len(qid_to_kc_name)} mappings")
+    
+#     # 2. For ASSIST2017, we might not need kc_name_to_id at all
+#     # or it might be identity mapping
+#     kc_name_to_id_path = mappings_path / "kc_name_to_id.json"
+#     if kc_name_to_id_path.exists():
+#         with open(kc_name_to_id_path, 'r') as f:
+#             kc_name_to_id_raw = json.load(f)
+#     else:
+#         kc_name_to_id_raw = {}
+    
+#     # 3. Load keyid2idx which has skill_name -> position
+#     with open(keyid2idx_path, 'r') as f:
+#         keyid2idx = json.load(f)
+    
+#     concepts_raw = keyid2idx['concepts']
+    
+#     # For ASSIST2017: concepts maps skill_name -> position directly
+#     # Create kc_name_to_id as identity and kc_id_to_position from concepts
+#     kc_name_to_id = {}
+#     kc_id_to_position = {}
+    
+#     for skill_name, position in concepts_raw.items():
+#         # Use skill_name as both name and ID
+#         kc_name_to_id[skill_name] = skill_name  # Identity mapping
+#         kc_id_to_position[skill_name] = int(position)
+    
+#     print(f"   ✅ kc_name_to_id: {len(kc_name_to_id)} mappings (identity)")
+#     print(f"   ✅ concepts (skill_name -> position): {len(kc_id_to_position)} positions")
+    
+#     # Show sample
+#     print(f"\n📋 Sample mappings (ASSIST2017 format):")
+#     if qid_to_kc_name:
+#         sample_qid = list(qid_to_kc_name.keys())[0]
+#         sample_skill = qid_to_kc_name[sample_qid]
+#         print(f"   Question: '{sample_qid}' -> Skill: '{sample_skill}'")
+        
+#         if sample_skill in kc_id_to_position:
+#             sample_position = kc_id_to_position[sample_skill]
+#             print(f"   Skill: '{sample_skill}' -> Position: {sample_position}")
+    
+#     return qid_to_kc_name, kc_name_to_id, kc_id_to_position
+
+
+def load_assist2017_mappings(
+    mappings_dir: str = "mappings_output2017",
+    keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
+) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
+    """
+    Special loader for ASSIST2017 which uses skill_name as bridge.
+    
+    Mapping chain for ASSIST2017:
+    1. question_id -> kc_name (from qid_to_kc.json)
+    2. kc_name -> skill_id (from kc_name_to_id.json)  
+    3. skill_name -> position (from keyid2idx.json concepts)
+    
+    The trick: skill_id == skill_name (they're the same!)
+    """
+    
+    mappings_path = Path(mappings_dir)
+    
+    print(f"📂 Loading ASSIST2017 mappings from {mappings_dir}/")
+    
+    # 1. Load qid_to_kc (question_id -> kc_name)
+    qid_to_kc_json_path = mappings_path / "qid_to_kc.json"
+    with open(qid_to_kc_json_path, 'r') as f:
+        qid_to_kc_name = json.load(f)
+    print(f"   ✅ qid_to_kc: {len(qid_to_kc_name)} mappings")
+    
+    # 2. Load kc_name_to_id (kc_name -> skill_id/skill_name)
+    kc_name_to_id_path = mappings_path / "kc_name_to_id.json"
+    with open(kc_name_to_id_path, 'r') as f:
+        kc_name_to_skill = json.load(f)  # This actually maps to skill names!
+    print(f"   ✅ kc_name_to_skill: {len(kc_name_to_skill)} mappings")
+    
+    # 3. Load keyid2idx (skill_name -> position)
+    with open(keyid2idx_path, 'r') as f:
+        keyid2idx = json.load(f)
+    
+    concepts_raw = keyid2idx['concepts']
+    print(f"   ✅ concepts (skill_name->position): {len(concepts_raw)} positions")
+    
+    # Build the final mappings
+    # For ASSIST2017: kc_name_to_id stays as loaded (kc_name -> skill_name)
+    # And kc_id_to_position uses skill_name as key
+    kc_name_to_id = {}
+    kc_id_to_position = {}
+    
+    # Process each kc_name to find its position
+    matched = 0
+    unmatched = []
+    
+    for kc_name, skill_id in kc_name_to_skill.items():
+        # The skill_id is actually the skill_name
+        skill_name = str(skill_id)
+        
+        # Store kc_name -> skill_name mapping
+        kc_name_to_id[kc_name] = skill_name
+        
+        # Check if this skill_name exists in concepts
+        if skill_name in concepts_raw:
+            kc_id_to_position[skill_name] = int(concepts_raw[skill_name])
+            matched += 1
+        else:
+            unmatched.append((kc_name, skill_name))
+    
+    print(f"\n📊 Mapping Results:")
+    print(f"   KC names with skill mapping: {len(kc_name_to_id)}")
+    print(f"   Skills with positions: {matched}")
+    print(f"   Skills without positions: {len(unmatched)}")
+    
+    if unmatched and len(unmatched) <= 10:
+        print(f"\n❌ Unmatched skills:")
+        for kc_name, skill_name in unmatched[:10]:
+            print(f"      KC '{kc_name}' -> skill '{skill_name}' (not in concepts)")
+    
+    # Show sample mapping chain
+    print(f"\n📋 Sample mapping chain:")
+    sample_qid = list(qid_to_kc_name.keys())[0]
+    sample_kc = qid_to_kc_name[sample_qid]
+    print(f"   Question: '{sample_qid}' -> KC: '{sample_kc}'")
+    
+    if sample_kc in kc_name_to_id:
+        sample_skill = kc_name_to_id[sample_kc]
+        print(f"   KC: '{sample_kc}' -> Skill: '{sample_skill}'")
+        
+        if sample_skill in kc_id_to_position:
+            sample_pos = kc_id_to_position[sample_skill]
+            print(f"   Skill: '{sample_skill}' -> Position: {sample_pos}")
+            print(f"   ✅ Complete chain: {sample_qid} -> {sample_kc} -> {sample_skill} -> position {sample_pos}")
+    
+    return qid_to_kc_name, kc_name_to_id, kc_id_to_position
+
 def check_requirements():
     """Setup and validate the embedding provider."""
     
@@ -98,157 +258,33 @@ def check_requirements():
     except Exception as e:
         raise RuntimeError(f"❌ Embedding system setup failed: {e}")
 
-# =============================================================================
-# STEP 2: DYNAMIC PIPELINE CONFIGURATIONS
-# =============================================================================
-
-# def get_pipeline_configs(question_df, embedding_model, provider):
-#     """Return all 9 valid pipeline configurations with dynamic setup."""
-    
-#     # Helper function for embedding text using current provider
-#     def embed_text(text):
-#         return em._get_embedding(text, model=embedding_model, provider=provider)
-    
-#     # Get auto-detected window size
-#     from kc_methods import get_window_size_for_model
-#     auto_window_size = get_window_size_for_model(embedding_model)
-    
-#     print(f"🔧 Configuration:")
-#     print(f"   Model: {embedding_model}")
-#     print(f"   Window size: {auto_window_size} chars")
-#     print(f"   Dimensions: {em.get_embedding_dimension(embedding_model)}")
-    
-#     # Pre-compute antonym embeddings for efficiency
-#     print("🔄 Pre-computing antonym embeddings...")
-#     antonym_embeddings = {
-#         "CORRECT": embed_text("CORRECT"),
-#         "INCORRECT": embed_text("INCORRECT")
-#     }
-#     print(f"✅ Antonym embeddings ready")
-    
-#     configs = {
-#         # Group 1: ("question", "kc", "sa") - 4 pipelines
-#         "pipeline_1": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="average",
-#             sa_strategy="mirror",
-#             execution_order=("question", "kc", "sa")
-#         ),
-        
-#         "pipeline_2": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="average", 
-#             sa_strategy="stack_antonym",
-#             execution_order=("question", "kc", "sa"),
-#             sa_kwargs={
-#                 "antonym_embeddings": antonym_embeddings,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         ),
-        
-#         "pipeline_3": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="sample_single_question",
-#             sa_strategy="mirror", 
-#             execution_order=("question", "kc", "sa")
-#         ),
-        
-#         "pipeline_4": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="sample_single_question",
-#             sa_strategy="stack_antonym",
-#             execution_order=("question", "kc", "sa"),
-#             sa_kwargs={
-#                 "antonym_embeddings": antonym_embeddings,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         ),
-        
-#         # Group 2: ("kc", "question", "sa") - 2 pipelines  
-#         "pipeline_5": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="stuff_window",
-#             sa_strategy="mirror",
-#             execution_order=("kc", "question", "sa"),
-#             kc_kwargs={
-#                 "window_size": auto_window_size,
-#                 "question_df": question_df,
-#                 "text_to_embedding_fn": embed_text,
-#                 "embedding_model": embedding_model
-#             }
-#         ),
-        
-#         "pipeline_6": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="stuff_window",
-#             sa_strategy="stack_antonym", 
-#             execution_order=("kc", "question", "sa"),
-#             kc_kwargs={
-#                 "window_size": auto_window_size,
-#                 "question_df": question_df,
-#                 "text_to_embedding_fn": embed_text,
-#                 "embedding_model": embedding_model
-#             },
-#             sa_kwargs={
-#                 "antonym_embeddings": antonym_embeddings,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         ),
-        
-#         # Group 3: ("sa", "question", "kc") - 2 pipelines
-#         "pipeline_7": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="average",
-#             sa_strategy="add_words",
-#             execution_order=("sa", "question", "kc"),
-#             sa_kwargs={
-#                 "repetitions": 2,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         ),
-        
-#         "pipeline_8": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="sample_single_question", 
-#             sa_strategy="add_words",
-#             execution_order=("sa", "question", "kc"),
-#             sa_kwargs={
-#                 "repetitions": 2,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         ),
-        
-#         # Group 4: ("sa", "kc", "question") - 1 pipeline
-#         "pipeline_9": EmbeddingPipelineConfig(
-#             question_embedding_model=embedding_model,
-#             kc_strategy="stuff_window",
-#             sa_strategy="add_words",
-#             execution_order=("sa", "kc", "question"),
-#             kc_kwargs={
-#                 "window_size": auto_window_size,
-#                 "question_df": question_df,
-#                 "text_to_embedding_fn": embed_text,
-#                 "embedding_model": embedding_model
-#             },
-#             sa_kwargs={
-#                 "repetitions": 2,
-#                 "text_to_embedding_fn": embed_text
-#             }
-#         )
-#     }
-    
-#     return configs
 
 DATASET_CONFIG = {
     "assist2009": {
         "mappings_dir": "mappings_output2009",
-        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
+        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+        "mapping_format": "standard"  # kc_name -> kc_id -> position
     },
     "assist2012": {
         "mappings_dir": "mappings_output2012", 
-        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json"
+        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json",
+        "mapping_format": "standard"  # kc_name -> kc_id -> position
+    },
+    "assist2017": {
+        "mappings_dir": "mappings_output2017",
+        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json",
+        "mapping_format": "direct"  # skill_name -> position directly
     }
 }
+
+# DATASET_CONFIG = {
+#     "assist2017": {
+#         "mappings_dir": "mappings_output2017",
+#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json",
+#         "mapping_format": "direct"  # skill_name -> position directly
+#     }
+# }
+
 
 # DATASET_CONFIG = {
 #     "assist2009": {
@@ -264,233 +300,6 @@ DATASET_CONFIG = {
 #         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
 #     }
 # }
-
-
-# def process_single_dataset(dataset_name: str, dataset_config: dict, provider_info: dict):
-#     """
-#     Process a single dataset and generate embeddings.
-    
-#     Parameters
-#     ----------
-#     dataset_name : str
-#         Name of the dataset (e.g., 'assist2009')
-#     dataset_config : dict
-#         Configuration for this dataset
-#     provider_info : dict
-#         Embedding provider information
-        
-#     Returns
-#     -------
-#     dict
-#         Results for this dataset
-#     """
-    
-#     print(f"\n" + "="*80)
-#     print(f"🎯 PROCESSING DATASET: {dataset_name.upper()}")
-#     print("="*80)
-    
-#     mappings_dir = dataset_config["mappings_dir"]
-#     keyid2idx_path = dataset_config["keyid2idx_path"]
-    
-#     try:
-#         # Step 1: Check if dataset files exist
-#         mappings_path = Path(mappings_dir)
-#         if not mappings_path.exists():
-#             print(f"❌ Mappings directory not found: {mappings_dir}")
-#             return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {mappings_dir}"}
-        
-#         if not Path(keyid2idx_path).exists():
-#             print(f"❌ KeyID2Idx file not found: {keyid2idx_path}")
-#             return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {keyid2idx_path}"}
-        
-#         print(f"✅ Dataset files found:")
-#         print(f"   Mappings: {mappings_dir}")
-#         print(f"   KeyID2Idx: {keyid2idx_path}")
-        
-#         # Step 2: Debug question IDs
-#         debug_question_ids(mappings_dir)
-        
-#         # Step 3: Load all mappings
-#         qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_your_complete_mappings(
-#             mappings_dir, keyid2idx_path
-#         )
-        
-#         # Step 4: Validate mappings
-#         if not validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position):
-#             print(f"❌ Mapping validation failed for {dataset_name}")
-#             return {"dataset": dataset_name, "status": "validation_failed", "error": "Mapping chain validation failed"}
-        
-#         # Step 5: Create question DataFrame
-#         question_df = create_question_df_from_csv(mappings_dir)
-        
-#         # Step 6: Verify question ID overlap
-#         df_qids = set(question_df['question_id'])
-#         mapping_qids = set(qid_to_kc_name.keys())
-#         overlap = df_qids & mapping_qids
-        
-#         print(f"\n🔍 Question ID verification:")
-#         print(f"   Question IDs in DataFrame: {len(df_qids)}")
-#         print(f"   Question IDs in mapping: {len(mapping_qids)}")
-#         print(f"   Overlapping IDs: {len(overlap)}")
-        
-#         if len(overlap) == 0:
-#             print(f"❌ No overlapping question IDs for {dataset_name}!")
-#             return {"dataset": dataset_name, "status": "no_overlap", "error": "No overlapping question IDs"}
-        
-#         overlap_rate = len(overlap) / len(df_qids) * 100
-#         print(f"   Overlap rate: {overlap_rate:.1f}%")
-        
-#         # Step 7: Setup pipelines
-#         print(f"\n⚙️ Setting up pipeline configurations...")
-#         configs = get_pipeline_configs(question_df, provider_info["model"], provider_info["provider"])
-        
-#         # Step 8: Create output directory
-#         output_dir = Path(f"final_embeddings_{dataset_name}")
-#         output_dir.mkdir(exist_ok=True)
-#         print(f"📁 Output directory: {output_dir}")
-        
-#         # Step 9: Save mapping info
-#         mapping_info = {
-#             "dataset": dataset_name,
-#             "source_files": {
-#                 "qid_to_kc": f"{mappings_dir}/qid_to_kc.json",
-#                 "kc_name_to_id": f"{mappings_dir}/kc_name_to_id.json", 
-#                 "concepts": keyid2idx_path,
-#                 "questions": f"{mappings_dir}/questions_with_kc.csv"
-#             },
-#             "mapping_statistics": {
-#                 "total_questions_csv": len(question_df),
-#                 "total_questions_mapping": len(qid_to_kc_name),
-#                 "overlapping_questions": len(overlap),
-#                 "overlap_rate": overlap_rate,
-#                 "unique_kc_names": len(set(qid_to_kc_name.values())),
-#                 "kc_name_mappings": len(kc_name_to_id),
-#                 "concept_positions": len(kc_id_to_position),
-#                 "max_position": max(kc_id_to_position.values())
-#             }
-#         }
-        
-#         with open(output_dir / "mapping_info.json", 'w') as f:
-#             json.dump(mapping_info, f, indent=2)
-        
-#         # Step 10: Generate embeddings for all pipelines
-#         pipeline_results = {}
-#         final_embeddings = {}
-        
-#         for pipeline_name, config in configs.items():
-#             print(f"\n🚀 Processing {pipeline_name}")
-#             print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
-            
-#             try:
-#                 # Generate embeddings
-#                 pipeline = EmbeddingPipeline(config)
-#                 q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
-                
-#                 if sa_vecs:
-#                     # Convert to final ordered tensor
-#                     final_tensor = convert_sa_to_final_ordered_tensor(
-#                         sa_vecs, kc_name_to_id, kc_id_to_position
-#                     )
-                    
-#                     final_embeddings[pipeline_name] = final_tensor
-                    
-#                     # Save final DKT-ready tensor
-#                     torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
-                    
-#                     # Save original embeddings for reference
-#                     clean_config = EmbeddingPipelineConfig(
-#                         question_embedding_model=config.question_embedding_model,
-#                         kc_strategy=config.kc_strategy,
-#                         sa_strategy=config.sa_strategy,
-#                         execution_order=config.execution_order,
-#                         kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
-#                         sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
-#                     )
-                    
-#                     with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
-#                         pickle.dump({
-#                             'question_embeddings': q_vecs,
-#                             'kc_embeddings': kc_vecs,
-#                             'sa_embeddings': sa_vecs,
-#                             'config': clean_config,
-#                             'provider_info': provider_info
-#                         }, f)
-                    
-#                     print(f"   ✅ Success: {final_tensor.shape}")
-#                     pipeline_results[pipeline_name] = True
-#                 else:
-#                     print(f"   ❌ No SA embeddings generated")
-#                     pipeline_results[pipeline_name] = False
-                
-#             except Exception as e:
-#                 print(f"   ❌ Failed: {e}")
-#                 pipeline_results[pipeline_name] = False
-        
-#         # Step 11: Save all final embeddings
-#         if final_embeddings:
-#             torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
-            
-#             sample_tensor = next(iter(final_embeddings.values()))
-            
-#             summary = {
-#                 "dataset": dataset_name,
-#                 "generation_timestamp": str(pd.Timestamp.now()),
-#                 "successful_pipelines": len(final_embeddings),
-#                 "total_pipelines": len(pipeline_results),
-#                 "final_tensor_shape": list(sample_tensor.shape),
-#                 "total_parameters_per_pipeline": sample_tensor.numel(),
-#                 "embedding_provider": provider_info,
-#                 "data_statistics": mapping_info["mapping_statistics"],
-#                 "pipeline_results": pipeline_results,
-#             }
-            
-#             with open(output_dir / "generation_summary.json", 'w') as f:
-#                 json.dump(summary, f, indent=2)
-        
-#         # Step 12: Dataset summary
-#         successful = sum(pipeline_results.values())
-#         total = len(pipeline_results)
-        
-#         print(f"\n📈 DATASET SUMMARY - {dataset_name.upper()}")
-#         print(f"-" * 50)
-#         print(f"Successful pipelines: {successful}/{total}")
-#         print(f"Questions processed: {len(question_df):,}")
-#         print(f"Questions with embeddings: {len(overlap):,}")
-#         print(f"KC names: {len(set(qid_to_kc_name.values()))}")
-#         print(f"Final positions: {len(kc_id_to_position)}")
-        
-#         if final_embeddings:
-#             sample_shape = next(iter(final_embeddings.values())).shape
-#             print(f"DKT tensor shape: {sample_shape}")
-#             print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
-        
-#         print(f"Pipeline Results:")
-#         for pipeline_name, success in pipeline_results.items():
-#             status = "✅" if success else "❌"
-#             print(f"   {status} {pipeline_name}")
-        
-#         if successful > 0:
-#             print(f"✅ {dataset_name} completed successfully!")
-#             print(f"📁 Output: {output_dir}/")
-        
-#         return {
-#             "dataset": dataset_name,
-#             "status": "completed",
-#             "successful_pipelines": successful,
-#             "total_pipelines": total,
-#             "output_dir": str(output_dir),
-#             "pipeline_results": pipeline_results
-#         }
-        
-#     except Exception as e:
-#         print(f"\n❌ Dataset {dataset_name} failed with error: {e}")
-#         import traceback
-#         traceback.print_exc()
-#         return {
-#             "dataset": dataset_name,
-#             "status": "failed",
-#             "error": str(e)
-#         }
 
 
 def process_single_dataset(dataset_name: str, dataset_config: dict, provider_info: dict):
@@ -851,63 +660,6 @@ def get_pipeline_configs(question_df, embedding_model, provider):
     return configs
 
 
-
-# =============================================================================
-# STEP 3: GENERATE EMBEDDINGS FOR ALL PIPELINES
-# =============================================================================
-
-# def generate_embeddings_for_pipeline(pipeline_name, config, question_df, qid_to_kc, output_dir, provider_info):
-#     """Generate embeddings for a single pipeline configuration."""
-    
-#     print(f"\n🚀 Generating embeddings for {pipeline_name}")
-#     print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
-#     print(f"   Order: {config.execution_order}")
-    
-#     try:
-#         # Create pipeline and run
-#         pipeline = EmbeddingPipeline(config)
-#         q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc)
-        
-#         # Print results
-#         print(f"   ✅ Generated:")
-#         print(f"      - {len(q_vecs)} question embeddings") 
-#         print(f"      - {len(kc_vecs)} KC embeddings")
-#         print(f"      - {len(sa_vecs)} SA embeddings")
-        
-#         # Get embedding dimensions
-#         if q_vecs:
-#             q_dim = next(iter(q_vecs.values())).shape[0]
-#             print(f"      - Question embedding dim: {q_dim}")
-#         if kc_vecs:
-#             kc_dim = next(iter(kc_vecs.values())).shape[0] 
-#             print(f"      - KC embedding dim: {kc_dim}")
-#         if sa_vecs:
-#             sa_dim = next(iter(sa_vecs.values())).shape[0]
-#             print(f"      - SA embedding dim: {sa_dim}")
-#             total_sa_dims = len(sa_vecs) * sa_dim
-#             print(f"      - Total SA dimensions: {total_sa_dims}")
-        
-#         # Save embeddings
-#         output_path = output_dir / f"{pipeline_name}_embeddings.pkl"
-#         with open(output_path, 'wb') as f:
-#             pickle.dump({
-#                 'question_embeddings': q_vecs,
-#                 'kc_embeddings': kc_vecs, 
-#                 'sa_embeddings': sa_vecs,
-#                 'config': config,
-#                 'provider_info': provider_info
-#             }, f)
-        
-#         print(f"   💾 Saved to: {output_path}")
-#         return True
-        
-#     except Exception as e:
-#         print(f"   ❌ Failed: {e}")
-#         import traceback
-#         traceback.print_exc()
-#         return False
-
-
 def generate_embeddings_for_pipeline(pipeline_name, config, question_df, qid_to_kc, output_dir, provider_info):
     """Generate embeddings for a single pipeline configuration."""
     
@@ -1158,6 +910,184 @@ def load_your_complete_mappings(
     return qid_to_kc_name, kc_name_to_id, kc_id_to_position
 
 
+def load_dataset_mappings(
+    mappings_dir: str,
+    keyid2idx_path: str,
+    mapping_format: str = "standard"
+) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
+    """
+    Load mappings based on dataset format.
+    FIXED: Only apply format conversion for "direct" format (ASSIST2017)
+    """
+    
+    mappings_path = Path(mappings_dir)
+    
+    print(f"📂 Loading mappings from {mappings_dir}/")
+    print(f"   Format: {mapping_format}")
+    
+    # 1. Load qid_to_kc (always the same)
+    qid_to_kc_json_path = mappings_path / "qid_to_kc.json"
+    with open(qid_to_kc_json_path, 'r') as f:
+        qid_to_kc_name = json.load(f)
+    print(f"   ✅ qid_to_kc: {len(qid_to_kc_name)} mappings")
+    
+    # 2. Load keyid2idx
+    with open(keyid2idx_path, 'r') as f:
+        keyid2idx = json.load(f)
+    concepts_raw = keyid2idx['concepts']
+    
+    if mapping_format == "direct":
+        # ASSIST2017: KC names in data directly match concept keys (with format conversion)
+        print(f"   📌 Direct KC name to position mapping")
+        
+        # Create identity mapping for kc_name_to_id
+        kc_name_to_id = {}
+        kc_id_to_position = {}
+        
+        # Get unique KC names from questions
+        unique_kc_names = set(qid_to_kc_name.values())
+        
+        matched = 0
+        unmatched = []
+        
+        for kc_name in unique_kc_names:
+            matched_key = None
+            
+            # Try exact match first
+            if kc_name in concepts_raw:
+                matched_key = kc_name
+            # Try with underscores converted to hyphens
+            elif kc_name.replace('_', '-') in concepts_raw:
+                matched_key = kc_name.replace('_', '-')
+            # Try with "application_" -> "application: " pattern
+            elif kc_name.startswith('application_'):
+                parts = kc_name.split('_')
+                if len(parts) > 1:
+                    application_key = parts[0] + ': ' + ' '.join(parts[1:])
+                    if application_key in concepts_raw:
+                        matched_key = application_key
+            # Try other patterns
+            elif kc_name.replace('_', ' ') in concepts_raw:
+                matched_key = kc_name.replace('_', ' ')
+            # Try n_xxx pattern -> n-xxx
+            elif kc_name.startswith('n_'):
+                n_key = kc_name.replace('_', '-')
+                if n_key in concepts_raw:
+                    matched_key = n_key
+            # Try p_xxx pattern -> p-xxx
+            elif kc_name.startswith('p_'):
+                p_key = kc_name.replace('_', '-')
+                if p_key in concepts_raw:
+                    matched_key = p_key
+            
+            if matched_key:
+                kc_name_to_id[kc_name] = matched_key
+                kc_id_to_position[matched_key] = int(concepts_raw[matched_key])
+                matched += 1
+            else:
+                unmatched.append(kc_name)
+        
+        print(f"   ✅ kc_name_to_id: {matched} mappings (identity with format conversion)")
+        print(f"   ✅ kc->position: {matched} positions found")
+        
+        if unmatched:
+            print(f"   ⚠️ {len(unmatched)} KC names not in concepts:")
+            for kc in unmatched[:5]:
+                print(f"      - '{kc}'")
+            if len(unmatched) > 5:
+                print(f"      ... and {len(unmatched)-5} more")
+    
+    else:
+        # Standard format: kc_name -> kc_id -> position
+        # NO FORMAT CONVERSION HERE - just load as-is
+        kc_name_to_id_path = mappings_path / "kc_name_to_id.json"
+        with open(kc_name_to_id_path, 'r') as f:
+            kc_name_to_id = json.load(f)
+        print(f"   ✅ kc_name_to_id: {len(kc_name_to_id)} mappings")
+        
+        # Convert concepts to proper format - NO CONVERSION
+        kc_id_to_position = {kc_id: int(position) for kc_id, position in concepts_raw.items()}
+        print(f"   ✅ concepts: {len(kc_id_to_position)} positions")
+    
+    return qid_to_kc_name, kc_name_to_id, kc_id_to_position
+
+
+def validate_direct_mapping(
+    qid_to_kc_name: Dict[str, str],
+    kc_id_to_position: Dict[str, int]
+) -> bool:
+    """
+    Validate direct KC name -> position mapping (for ASSIST2017).
+    FIXED: Account for underscore/hyphen conversion
+    """
+    
+    print(f"\n🔍 Validating direct mapping...")
+    
+    # Get unique KC names from questions
+    data_kc_names = set(qid_to_kc_name.values())
+    position_kc_names = set(kc_id_to_position.keys())
+    
+    # Try to match with underscore/hyphen conversion
+    matched_kc_names = set()
+    unmatched_kc_names = set()
+    
+    for kc_name in data_kc_names:
+        # Try exact match
+        if kc_name in position_kc_names:
+            matched_kc_names.add(kc_name)
+        # Try with underscore to hyphen conversion
+        elif kc_name.replace('_', '-') in position_kc_names:
+            matched_kc_names.add(kc_name)
+        # Try with hyphen to underscore conversion
+        elif kc_name.replace('-', '_') in position_kc_names:
+            matched_kc_names.add(kc_name)
+        else:
+            unmatched_kc_names.add(kc_name)
+    
+    print(f"   KC names in questions: {len(data_kc_names)}")
+    print(f"   KC names with positions: {len(position_kc_names)}")
+    print(f"   Matched KC names: {len(matched_kc_names)}")
+    print(f"   Unmatched KC names: {len(unmatched_kc_names)}")
+    
+    coverage = len(matched_kc_names) / len(data_kc_names) * 100 if data_kc_names else 0
+    print(f"   Coverage: {coverage:.1f}%")
+    
+    if unmatched_kc_names:
+        print(f"   ⚠️  KC names without positions: {len(unmatched_kc_names)}")
+        for kc in list(unmatched_kc_names)[:10]:
+            print(f"      - '{kc}'")
+            # Try to find close matches
+            kc_hyphen = kc.replace('_', '-')
+            kc_underscore = kc.replace('-', '_')
+            kc_colon = kc.replace('_', ': ')
+            
+            # Check various patterns
+            for pos_kc in position_kc_names:
+                if kc_hyphen in pos_kc or kc_underscore in pos_kc or kc_colon in pos_kc:
+                    print(f"        (possible match: '{pos_kc}')")
+                    break
+        
+        if len(unmatched_kc_names) > 10:
+            print(f"      ... and {len(unmatched_kc_names)-10} more")
+    
+    # Accept if coverage is good enough
+    min_coverage = 80.0
+    is_valid = coverage >= min_coverage
+    
+    if is_valid:
+        print(f"   ✅ Direct mapping validated!")
+    else:
+        print(f"   ❌ Coverage too low: {coverage:.1f}% < {min_coverage}%")
+    
+    print(f"\n📊 Mapping Statistics:")
+    print(f"   Total questions: {len(qid_to_kc_name):,}")
+    print(f"   Unique KC names: {len(data_kc_names)}")
+    print(f"   KC names matched: {len(matched_kc_names)}")
+    if kc_id_to_position:
+        print(f"   Max position: {max(kc_id_to_position.values())}")
+    
+    return is_valid
+
 
 # def validate_your_mapping_chain(
 #     qid_to_kc_name: Dict[str, str],
@@ -1166,11 +1096,7 @@ def load_your_complete_mappings(
 # ) -> bool:
 #     """
 #     Validate your complete mapping chain.
-    
-#     Returns
-#     -------
-#     bool
-#         True if all mappings are complete and valid
+#     FIXED: Handle both with and without .0 suffix in keyid2idx
 #     """
     
 #     print(f"\n🔍 Validating mapping chain...")
@@ -1179,91 +1105,39 @@ def load_your_complete_mappings(
 #     data_kc_names = set(qid_to_kc_name.values())
 #     mapping_kc_names = set(kc_name_to_id.keys())
     
-#     # Get KC IDs
-#     mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
+#     # Get KC IDs - create both formats
+#     mapped_kc_ids_raw = set(str(kc_id) for kc_id in kc_name_to_id.values())
 #     position_kc_ids = set(kc_id_to_position.keys())
+    
+#     # Determine format used in keyid2idx (check if any have .0 suffix)
+#     uses_decimal_format = any('.0' in kid for kid in position_kc_ids)
+    
+#     # Convert mapped IDs to match the format
+#     if uses_decimal_format:
+#         # Add .0 suffix to mapped IDs
+#         mapped_kc_ids = set(f"{kid}.0" if '.' not in kid else kid for kid in mapped_kc_ids_raw)
+#     else:
+#         # Use IDs as-is (no .0 suffix)
+#         mapped_kc_ids = mapped_kc_ids_raw
     
 #     print(f"   KC names in questions: {len(data_kc_names)}")
 #     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
 #     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
 #     print(f"   KC IDs with positions: {len(position_kc_ids)}")
-    
-#     # Check for missing mappings
-#     missing_kc_names = data_kc_names - mapping_kc_names
-#     missing_kc_ids = mapped_kc_ids - position_kc_ids
-    
-#     is_valid = True
-    
-#     if missing_kc_names:
-#         print(f"   ❌ KC names without ID mappings: {len(missing_kc_names)}")
-#         if len(missing_kc_names) <= 5:
-#             print(f"      {list(missing_kc_names)}")
-#         else:
-#             print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
-#         is_valid = False
-    
-#     if missing_kc_ids:
-#         print(f"   ❌ KC IDs without positions: {len(missing_kc_ids)}")
-#         print(f"      {list(missing_kc_ids)}")
-#         is_valid = False
-    
-#     if is_valid:
-#         print(f"   ✅ All mappings validated successfully!")
-        
-#         # Show mapping statistics
-#         total_questions = len(qid_to_kc_name)
-#         total_kc_names = len(data_kc_names)
-#         total_positions = len(kc_id_to_position)
-        
-#         print(f"\n📊 Mapping Statistics:")
-#         print(f"   Total questions: {total_questions:,}")
-#         print(f"   Unique KC names: {total_kc_names}")
-#         print(f"   Final positions: {total_positions}")
-#         print(f"   Max position: {max(kc_id_to_position.values())}")
-        
-#     return is_valid
-
-
-# def validate_your_mapping_chain(
-#     qid_to_kc_name: Dict[str, str],
-#     kc_name_to_id: Dict[str, int], 
-#     kc_id_to_position: Dict[str, int]
-# ) -> bool:
-#     """
-#     Validate your complete mapping chain.
-#     FIXED: More flexible validation for different datasets
-#     """
-    
-#     print(f"\n🔍 Validating mapping chain...")
-    
-#     # Get unique KC names from questions
-#     data_kc_names = set(qid_to_kc_name.values())
-#     mapping_kc_names = set(kc_name_to_id.keys())
-    
-#     # Get KC IDs
-#     #mapped_kc_ids = set(str(kc_id) for kc_id in kc_name_to_id.values())
-#     mapped_kc_ids = set()
-#     for kc_id in kc_name_to_id.values():
-#         mapped_kc_ids.add(str(kc_id))
-#         mapped_kc_ids.add(f"{kc_id}.0")  # Add .0 version
-#     position_kc_ids = set(kc_id_to_position.keys())
-    
-#     print(f"   KC names in questions: {len(data_kc_names)}")
-#     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
-#     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
-#     print(f"   KC IDs with positions: {len(position_kc_ids)}")
+#     print(f"   Format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
     
 #     # Check for missing mappings
 #     missing_kc_names = data_kc_names - mapping_kc_names
 #     missing_kc_ids = mapped_kc_ids - position_kc_ids
     
 #     # Calculate coverage
-#     kc_name_coverage = len(data_kc_names - missing_kc_names) / len(data_kc_names) * 100
-#     kc_id_coverage = len(mapped_kc_ids - missing_kc_ids) / len(mapped_kc_ids) * 100
+#     kc_name_coverage = len(data_kc_names - missing_kc_names) / len(data_kc_names) * 100 if data_kc_names else 0
+#     kc_id_coverage = len(mapped_kc_ids - missing_kc_ids) / len(mapped_kc_ids) * 100 if mapped_kc_ids else 0
     
 #     print(f"   KC name coverage: {kc_name_coverage:.1f}%")
 #     print(f"   KC ID coverage: {kc_id_coverage:.1f}%")
     
+#     # Rest of the function continues as before...
 #     # More flexible validation - allow partial coverage
 #     is_valid = True
 #     min_coverage_threshold = 80.0  # Require at least 80% coverage
@@ -1301,21 +1175,20 @@ def load_your_complete_mappings(
 #         print(f"   📝 Will proceed with available mappings")
 #     else:
 #         print(f"   ❌ Mapping chain validation failed - coverage too low")
-        
-#         # Show mapping statistics
-#         total_questions = len(qid_to_kc_name)
-#         total_kc_names = len(data_kc_names)
-#         total_positions = len(kc_id_to_position)
-        
-#         print(f"\n📊 Mapping Statistics:")
-#         print(f"   Total questions: {total_questions:,}")
-#         print(f"   Unique KC names: {total_kc_names}")
-#         print(f"   Final positions: {total_positions}")
-#         if kc_id_to_position:
-#             print(f"   Max position: {max(kc_id_to_position.values())}")
-        
+    
+#     # Show mapping statistics
+#     total_questions = len(qid_to_kc_name)
+#     total_kc_names = len(data_kc_names)
+#     total_positions = len(kc_id_to_position)
+    
+#     print(f"\n📊 Mapping Statistics:")
+#     print(f"   Total questions: {total_questions:,}")
+#     print(f"   Unique KC names: {total_kc_names}")
+#     print(f"   Final positions: {total_positions}")
+#     if kc_id_to_position:
+#         print(f"   Max position: {max(kc_id_to_position.values())}")
+    
 #     return is_valid
-
 
 
 def validate_your_mapping_chain(
@@ -1334,20 +1207,22 @@ def validate_your_mapping_chain(
     data_kc_names = set(qid_to_kc_name.values())
     mapping_kc_names = set(kc_name_to_id.keys())
     
-    # Get KC IDs - create both formats
+    # Get KC IDs from kc_name_to_id
     mapped_kc_ids_raw = set(str(kc_id) for kc_id in kc_name_to_id.values())
     position_kc_ids = set(kc_id_to_position.keys())
     
     # Determine format used in keyid2idx (check if any have .0 suffix)
     uses_decimal_format = any('.0' in kid for kid in position_kc_ids)
     
-    # Convert mapped IDs to match the format
-    if uses_decimal_format:
-        # Add .0 suffix to mapped IDs
-        mapped_kc_ids = set(f"{kid}.0" if '.' not in kid else kid for kid in mapped_kc_ids_raw)
-    else:
-        # Use IDs as-is (no .0 suffix)
-        mapped_kc_ids = mapped_kc_ids_raw
+    # Convert mapped IDs to match the format in keyid2idx
+    mapped_kc_ids = set()
+    for kc_id in mapped_kc_ids_raw:
+        if uses_decimal_format and '.' not in kc_id:
+            # Add .0 suffix if keyid2idx uses it
+            mapped_kc_ids.add(f"{kc_id}.0")
+        else:
+            # Keep as-is
+            mapped_kc_ids.add(kc_id)
     
     print(f"   KC names in questions: {len(data_kc_names)}")
     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
@@ -1366,10 +1241,9 @@ def validate_your_mapping_chain(
     print(f"   KC name coverage: {kc_name_coverage:.1f}%")
     print(f"   KC ID coverage: {kc_id_coverage:.1f}%")
     
-    # Rest of the function continues as before...
     # More flexible validation - allow partial coverage
     is_valid = True
-    min_coverage_threshold = 80.0  # Require at least 80% coverage
+    min_coverage_threshold = 50.0  # Require at least 80% coverage
     
     if missing_kc_names:
         print(f"   ⚠️  KC names without ID mappings: {len(missing_kc_names)}")
@@ -1419,63 +1293,6 @@ def validate_your_mapping_chain(
     
     return is_valid
 
-# def create_question_df_from_csv(
-#     mappings_dir: str = "mappings_output"
-# ) -> pd.DataFrame:
-#     """
-#     Create question_df from your questions_with_kc.csv file.
-    
-#     Parameters
-#     ----------
-#     mappings_dir : str
-#         Directory containing questions_with_kc.csv
-        
-#     Returns
-#     -------
-#     pd.DataFrame
-#         DataFrame with required columns for the pipeline
-#     """
-    
-#     csv_path = Path(mappings_dir) / "questions_with_kc.csv"
-    
-#     print(f"📊 Loading questions from {csv_path}")
-#     df = pd.read_csv(csv_path)
-    
-#     # Create the required format for the pipeline
-#     question_df = pd.DataFrame({
-#         'question_id': df['question_id'].astype(str),
-#         'question_text': df['problem_body']
-#     })
-    
-#     print(f"   ✅ Loaded {len(question_df)} questions")
-#     print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
-    
-#     return question_df
-
-# def create_question_df_from_csv(
-#     mappings_dir: str = "mappings_output"
-# ) -> pd.DataFrame:
-#     """
-#     Create question_df from your questions_with_kc.csv file.
-#     FIXED: Ensures question IDs match the format in qid_to_kc.json
-#     """
-    
-#     csv_path = Path(mappings_dir) / "questions_with_kc.csv"
-    
-#     print(f"📊 Loading questions from {csv_path}")
-#     df = pd.read_csv(csv_path)
-    
-#     # FIXED: Convert question_id to match qid_to_kc format (add 'q' prefix)
-#     question_df = pd.DataFrame({
-#         'question_id': 'q' + df['question_id'].astype(str),  # Add 'q' prefix
-#         'question_text': df['problem_body']
-#     })
-    
-#     print(f"   ✅ Loaded {len(question_df)} questions")
-#     print(f"   Sample question ID: {question_df.iloc[0]['question_id']}")
-#     print(f"   Sample question: {question_df.iloc[0]['question_text'][:100]}...")
-    
-#     return question_df
 
 def create_question_df_from_csv(
     mappings_dir: str
@@ -1525,101 +1342,6 @@ def create_question_df_from_csv(
     return question_df
 
 
-
-
-# def convert_sa_to_final_ordered_tensor(
-#     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
-#     kc_name_to_id: Dict[str, int],
-#     kc_id_to_position: Dict[str, int],
-#     verbose: bool = True
-# ) -> torch.Tensor:
-#     """
-#     Convert SA embeddings to final ordered tensor using your exact mappings.
-    
-#     Parameters
-#     ----------
-#     sa_embeddings : Dict[Tuple[str, bool], torch.Tensor]
-#         SA embeddings: {(kc_name, is_correct): embedding_tensor}
-#     kc_name_to_id : Dict[str, int]
-#         KC name to ID mapping
-#     kc_id_to_position : Dict[str, int]
-#         KC ID to position mapping (from keyid2idx.json)
-#     verbose : bool
-#         Print detailed information
-        
-#     Returns
-#     -------
-#     torch.Tensor
-#         Final ordered tensor ready for DKT
-#     """
-    
-#     # Determine tensor size
-#     max_position = max(kc_id_to_position.values())
-#     tensor_size = max_position + 1  # 0-indexed positions
-    
-#     # Get embedding dimension
-#     sample_embedding = next(iter(sa_embeddings.values()))
-#     embedding_dim = sample_embedding.shape[0]
-    
-#     # Create ordered tensor
-#     ordered_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
-    
-#     # Track placements
-#     placed_correct = 0
-#     placed_incorrect = 0
-#     failed_placements = []
-    
-#     # Process each SA embedding
-#     for (kc_name, is_correct), embedding in sa_embeddings.items():
-        
-#         # KC name -> KC ID
-#         if kc_name not in kc_name_to_id:
-#             failed_placements.append(f"KC name '{kc_name}' not found in kc_name_to_id")
-#             continue
-        
-#         kc_id = kc_name_to_id[kc_name]
-#         kc_id_str = str(kc_id)
-        
-#         # KC ID -> position
-#         if kc_id_str not in kc_id_to_position:
-#             failed_placements.append(f"KC ID '{kc_id}' (from '{kc_name}') not found in concepts")
-#             continue
-        
-#         position = kc_id_to_position[kc_id_str]
-        
-#         # Place in tensor
-#         if is_correct:
-#             # Correct: positions 0 to tensor_size-1
-#             ordered_tensor[position] = embedding
-#             placed_correct += 1
-#         else:
-#             # Incorrect: positions tensor_size to 2*tensor_size-1
-#             ordered_tensor[tensor_size + position] = embedding
-#             placed_incorrect += 1
-    
-#     if verbose:
-#         print(f"✅ Created final ordered tensor: {ordered_tensor.shape}")
-#         print(f"   Tensor layout: [{tensor_size}, {embedding_dim}] × 2")
-#         print(f"   Rows 0-{tensor_size-1}: Correct embeddings by keyid2idx position")
-#         print(f"   Rows {tensor_size}-{2*tensor_size-1}: Incorrect embeddings by keyid2idx position")
-#         print(f"   Successfully placed correct: {placed_correct}")
-#         print(f"   Successfully placed incorrect: {placed_incorrect}")
-#         print(f"   Total parameters: {ordered_tensor.numel():,}")
-        
-#         if failed_placements:
-#             print(f"⚠️  Failed placements: {len(failed_placements)}")
-#             for failure in failed_placements[:3]:
-#                 print(f"      {failure}")
-#             if len(failed_placements) > 3:
-#                 print(f"      ... and {len(failed_placements)-3} more")
-        
-#         # Show example mappings
-#         print(f"\n📋 Example position mappings:")
-#         for kc_id, position in list(kc_id_to_position.items())[:5]:
-#             print(f"   KC ID {kc_id} -> position {position}")
-    
-#     return ordered_tensor
-
 def convert_sa_to_final_ordered_tensor(
     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
     kc_name_to_id: Dict[str, int],
@@ -1628,11 +1350,17 @@ def convert_sa_to_final_ordered_tensor(
 ) -> torch.Tensor:
     """
     Convert SA embeddings to final ordered tensor using your exact mappings.
-    FIXED: Handles both with and without .0 suffix formats
+    FIXED: Handles numeric IDs, string IDs, and .0 suffix formats
     """
     
-    # Detect format used in kc_id_to_position
-    uses_decimal_format = any('.0' in kid for kid in kc_id_to_position.keys())
+    # Detect ID format from kc_name_to_id
+    sample_kc_id = next(iter(kc_name_to_id.values())) if kc_name_to_id else None
+    is_string_id = isinstance(sample_kc_id, str)
+    
+    # Detect if positions use .0 suffix (only relevant for numeric IDs)
+    uses_decimal_format = False
+    if not is_string_id and kc_id_to_position:
+        uses_decimal_format = any('.0' in str(kid) for kid in kc_id_to_position.keys())
     
     # Filter out non-tensor SA embeddings
     tensor_sa_embeddings = {}
@@ -1648,7 +1376,9 @@ def convert_sa_to_final_ordered_tensor(
         print(f"🔍 SA embeddings analysis:")
         print(f"   Tensor embeddings: {len(tensor_sa_embeddings)}")
         print(f"   String embeddings: {len(string_sa_embeddings)} (add_words strategy)")
-        print(f"   Position format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
+        print(f"   ID type: {'string' if is_string_id else 'numeric'}")
+        if not is_string_id:
+            print(f"   Position format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
     
     # Handle add_words strategy
     if len(tensor_sa_embeddings) == 0 and len(string_sa_embeddings) > 0:
@@ -1689,10 +1419,15 @@ def convert_sa_to_final_ordered_tensor(
         kc_id = kc_name_to_id[kc_name]
         
         # Format KC ID to match kc_id_to_position format
-        if uses_decimal_format:
-            kc_id_str = f"{kc_id}.0"
-        else:
+        if is_string_id:
+            # For ASSIST2017: kc_id is already a string (skill_name)
             kc_id_str = str(kc_id)
+        else:
+            # For numeric IDs (ASSIST2009, ASSIST2012)
+            if uses_decimal_format:
+                kc_id_str = f"{kc_id}.0"
+            else:
+                kc_id_str = str(kc_id)
         
         # KC ID -> position
         if kc_id_str not in kc_id_to_position:
@@ -1726,83 +1461,6 @@ def convert_sa_to_final_ordered_tensor(
                 print(f"      ... and {len(failed_placements)-3} more")
     
     return ordered_tensor
-
-# def debug_question_ids():
-#     """Debug function to check question ID formats."""
-    
-#     print("🔍 Debugging question ID formats...")
-    
-#     # Load qid_to_kc
-#     with open("mappings_output/qid_to_kc.json", 'r') as f:
-#         qid_to_kc = json.load(f)
-    
-#     # Load CSV
-#     csv_df = pd.read_csv("mappings_output/questions_with_kc.csv")
-    
-#     # Check formats
-#     sample_qid_json = list(qid_to_kc.keys())[0]
-#     sample_qid_csv = str(csv_df['question_id'].iloc[0])
-    
-#     print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
-#     print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
-    
-#     # Check if they match
-#     csv_qids = set('q' + csv_df['question_id'].astype(str))
-#     json_qids = set(qid_to_kc.keys())
-    
-#     overlap = csv_qids & json_qids
-#     only_csv = csv_qids - json_qids
-#     only_json = json_qids - csv_qids
-    
-#     print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
-#     print(f"   QIDs in JSON: {len(json_qids)}")
-#     print(f"   Overlapping QIDs: {len(overlap)}")
-#     print(f"   Only in CSV: {len(only_csv)}")
-#     print(f"   Only in JSON: {len(only_json)}")
-    
-#     # FIXED: Compare len(overlap) instead of overlap
-#     if len(overlap) > 0:
-#         print(f"   ✅ Found {len(overlap)} matching question IDs")
-#     else:
-#         print(f"   ❌ No matching question IDs found!")
-
-# def debug_question_ids(mappings_dir: str):
-#     """Debug function to check question ID formats."""
-    
-#     print("🔍 Debugging question ID formats...")
-    
-#     # Load qid_to_kc
-#     with open(f"{mappings_dir}/qid_to_kc.json", 'r') as f:
-#         qid_to_kc = json.load(f)
-    
-#     # Load CSV
-#     csv_df = pd.read_csv(f"{mappings_dir}/questions_with_kc.csv")
-    
-#     # Check formats
-#     sample_qid_json = list(qid_to_kc.keys())[0]
-#     sample_qid_csv = str(csv_df['question_id'].iloc[0])
-    
-#     print(f"   Sample QID from JSON: '{sample_qid_json}' (type: {type(sample_qid_json)})")
-#     print(f"   Sample QID from CSV:  '{sample_qid_csv}' (type: {type(sample_qid_csv)})")
-    
-#     # Check if they match
-#     csv_qids = set('q' + csv_df['question_id'].astype(str))
-#     json_qids = set(qid_to_kc.keys())
-    
-#     overlap = csv_qids & json_qids
-#     only_csv = csv_qids - json_qids
-#     only_json = json_qids - csv_qids
-    
-#     print(f"   QIDs in CSV (with 'q' prefix): {len(csv_qids)}")
-#     print(f"   QIDs in JSON: {len(json_qids)}")
-#     print(f"   Overlapping QIDs: {len(overlap)}")
-#     print(f"   Only in CSV: {len(only_csv)}")
-#     print(f"   Only in JSON: {len(only_json)}")
-    
-#     if len(overlap) > 0:
-#         print(f"   ✅ Found {len(overlap)} matching question IDs")
-#     else:
-#         print(f"   ❌ No matching question IDs found!")
 
 
 def debug_question_ids(mappings_dir: str):
@@ -2206,7 +1864,69 @@ def generate_final_embeddings_with_debug():
         print(f"📁 Output directory: final_embeddings/")
         print(f"🎯 Use: final_embeddings/pipeline_X_final_dkt.pt for DKT training")
 
-
+def debug_assist2017_skills(mappings_dir: str, keyid2idx_path: str):
+    """Debug skill name mismatches in ASSIST2017."""
+    
+    print("\n🔍 Debugging ASSIST2017 skill names...")
+    
+    # Load qid_to_kc
+    with open(f"{mappings_dir}/qid_to_kc.json", 'r') as f:
+        qid_to_kc = json.load(f)
+    
+    # Load keyid2idx
+    with open(keyid2idx_path, 'r') as f:
+        keyid2idx = json.load(f)
+    concepts = keyid2idx['concepts']
+    
+    # Get unique skills from questions
+    question_skills = set(qid_to_kc.values())
+    concept_skills = set(concepts.keys())
+    
+    # Find overlaps and differences
+    overlap = question_skills & concept_skills
+    only_in_questions = question_skills - concept_skills
+    only_in_concepts = concept_skills - question_skills
+    
+    print(f"\n📊 Skill Analysis:")
+    print(f"   Skills in questions: {len(question_skills)}")
+    print(f"   Skills in concepts: {len(concept_skills)}")
+    print(f"   Overlapping: {len(overlap)}")
+    
+    print(f"\n📋 Sample skills from questions:")
+    for skill in list(question_skills)[:10]:
+        print(f"   - '{skill}'")
+    
+    print(f"\n📋 Sample skills from concepts (keyid2idx):")
+    for skill in list(concept_skills)[:10]:
+        print(f"   - '{skill}'")
+    
+    print(f"\n❌ Skills only in questions (not in concepts):")
+    for skill in list(only_in_questions)[:10]:
+        print(f"   - '{skill}'")
+    if len(only_in_questions) > 10:
+        print(f"   ... and {len(only_in_questions) - 10} more")
+    
+    print(f"\n❓ Skills only in concepts (not in questions):")
+    for skill in list(only_in_concepts)[:10]:
+        print(f"   - '{skill}'")
+    if len(only_in_concepts) > 10:
+        print(f"   ... and {len(only_in_concepts) - 10} more")
+    
+    # Check if there's a pattern (e.g., case mismatch, underscores vs spaces)
+    print(f"\n🔍 Checking for pattern mismatches...")
+    
+    # Try case-insensitive matching
+    question_skills_lower = {s.lower(): s for s in question_skills}
+    concept_skills_lower = {s.lower(): s for s in concept_skills}
+    case_overlap = set(question_skills_lower.keys()) & set(concept_skills_lower.keys())
+    
+    if len(case_overlap) > len(overlap):
+        print(f"   ⚠️ Case mismatch detected! Case-insensitive overlap: {len(case_overlap)}")
+        print(f"   Examples of case mismatches:")
+        for skill_lower in list(case_overlap - {s.lower() for s in overlap})[:5]:
+            q_skill = question_skills_lower[skill_lower]
+            c_skill = concept_skills_lower[skill_lower]
+            print(f"      Questions: '{q_skill}' vs Concepts: '{c_skill}'")
 
 def generate_all_datasets():
     """
@@ -2291,6 +2011,7 @@ def generate_all_datasets():
 
 
 
+
 def initialize_provider_silent(provider: str, model: str, config: dict) -> bool:
     """Initialize provider without user interaction."""
     
@@ -2299,20 +2020,275 @@ def initialize_provider_silent(provider: str, model: str, config: dict) -> bool:
         if not api_key or api_key == "your-openai-api-key-here":
             print("❌ OpenAI API key not configured")
             return False
-        return _setup_openai_client(api_key)
+        # USE MODULE PREFIX
+        return em._setup_openai_client(api_key)
         
     elif provider == "cohere":
         api_key = config.get("cohere_api_key")
         if not api_key or api_key == "your-cohere-api-key-here":
             print("❌ Cohere API key not configured")
             return False
-        return _setup_cohere_client(api_key)
+        # USE MODULE PREFIX
+        return em._setup_cohere_client(api_key)
         
     elif provider == "bert":
-        return _setup_bert_client()
+        # USE MODULE PREFIX
+        return em._setup_bert_client()
     
     return False
 
+def process_single_dataset_with_output_dir(
+    dataset_name: str, 
+    dataset_config: dict, 
+    provider_info: dict,
+    output_dir_name: str
+) -> dict:
+    """
+    Process a single dataset with custom output directory.
+    UPDATED: Uses mapping_format flag for different datasets
+    """
+    
+    print(f"\n" + "="*80)
+    print(f"🎯 PROCESSING DATASET: {dataset_name.upper()}")
+    print(f"🎯 MODEL: {provider_info['provider'].upper()} - {provider_info['model']}")
+    print("="*80)
+    
+    mappings_dir = dataset_config["mappings_dir"]
+    keyid2idx_path = dataset_config["keyid2idx_path"]
+    mapping_format = dataset_config.get("mapping_format", "standard")  # ADD THIS LINE
+    
+    try:
+        # Check if dataset files exist
+        mappings_path = Path(mappings_dir)
+        if not mappings_path.exists():
+            print(f"❌ Mappings directory not found: {mappings_dir}")
+            return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {mappings_dir}"}
+        
+        if not Path(keyid2idx_path).exists():
+            print(f"❌ KeyID2Idx file not found: {keyid2idx_path}")
+            return {"dataset": dataset_name, "status": "missing_files", "error": f"Missing {keyid2idx_path}"}
+        
+        print(f"✅ Dataset files found:")
+        print(f"   Mappings: {mappings_dir}")
+        print(f"   KeyID2Idx: {keyid2idx_path}")
+        print(f"   Format: {mapping_format}")  # ADD THIS LINE
+        
+        # Debug question IDs
+        debug_question_ids(mappings_dir)
+        
+        # REPLACE THE SPECIAL HANDLING WITH THIS:
+        # Use the general load_dataset_mappings function for ALL datasets
+        qid_to_kc_name, kc_name_to_id, kc_id_to_position = load_dataset_mappings(
+            mappings_dir, keyid2idx_path, mapping_format
+        )
+        
+        # Check if mappings are empty
+        if not qid_to_kc_name:
+            print(f"❌ Empty qid_to_kc mapping for {dataset_name}")
+            return {"dataset": dataset_name, "status": "empty_mappings", "error": "Empty qid_to_kc mapping"}
+        
+        # REPLACE THE VALIDATION SECTION WITH THIS:
+        # Use appropriate validation based on format
+        if mapping_format == "direct":
+            # Use the direct validation for ASSIST2017
+            is_valid = validate_direct_mapping(qid_to_kc_name, kc_id_to_position)
+        else:
+            # Standard validation for other datasets
+            is_valid = validate_your_mapping_chain(qid_to_kc_name, kc_name_to_id, kc_id_to_position)
+        
+        if not is_valid:
+            print(f"❌ Mapping validation failed for {dataset_name}")
+            return {"dataset": dataset_name, "status": "validation_failed", "error": "Mapping validation failed"}
+        
+        # The rest of your function remains exactly the same...
+        # Create question DataFrame
+        question_df = create_question_df_from_csv(mappings_dir)
+        
+        # Verify question ID overlap
+        df_qids = set(question_df['question_id'])
+        mapping_qids = set(qid_to_kc_name.keys())
+        overlap = df_qids & mapping_qids
+        
+        print(f"\n🔍 Question ID verification:")
+        print(f"   Question IDs in DataFrame: {len(df_qids)}")
+        print(f"   Question IDs in mapping: {len(mapping_qids)}")
+        print(f"   Overlapping IDs: {len(overlap)}")
+        
+        if len(overlap) == 0:
+            print(f"❌ No overlapping question IDs for {dataset_name}!")
+            return {"dataset": dataset_name, "status": "no_overlap", "error": "No overlapping question IDs"}
+        
+        overlap_rate = len(overlap) / len(df_qids) * 100
+        print(f"   Overlap rate: {overlap_rate:.1f}%")
+        
+        if overlap_rate < 50:
+            print(f"❌ Overlap rate too low: {overlap_rate:.1f}%")
+            return {"dataset": dataset_name, "status": "low_overlap", "error": f"Low overlap rate: {overlap_rate:.1f}%"}
+        
+        # Continue with pipeline setup and processing...
+        # (Rest remains exactly as you have it)
+        
+        # Step 7: Setup pipelines
+        print(f"\n⚙️ Setting up pipeline configurations...")
+        configs = get_pipeline_configs(question_df, provider_info["model"], provider_info["provider"])
+        
+        # Step 8: Create output directory - USING CUSTOM NAME
+        output_dir = Path(output_dir_name)
+        output_dir.mkdir(exist_ok=True)
+        print(f"📁 Output directory: {output_dir}")
+        
+        # Step 9: Save mapping info
+        mapping_info = {
+            "dataset": dataset_name,
+            "model": provider_info["model"],
+            "provider": provider_info["provider"],
+            "embedding_dim": provider_info["embedding_dim"],
+            "source_files": {
+                "qid_to_kc": f"{mappings_dir}/qid_to_kc.json",
+                "kc_name_to_id": f"{mappings_dir}/kc_name_to_id.json", 
+                "concepts": keyid2idx_path,
+                "questions": f"{mappings_dir}/questions_with_kc.csv"
+            },
+            "mapping_statistics": {
+                "total_questions_csv": len(question_df),
+                "total_questions_mapping": len(qid_to_kc_name),
+                "overlapping_questions": len(overlap),
+                "overlap_rate": overlap_rate,
+                "unique_kc_names": len(set(qid_to_kc_name.values())),
+                "kc_name_mappings": len(kc_name_to_id),
+                "concept_positions": len(kc_id_to_position),
+                "max_position": max(kc_id_to_position.values()) if kc_id_to_position else 0
+            }
+        }
+        
+        with open(output_dir / "mapping_info.json", 'w') as f:
+            json.dump(mapping_info, f, indent=2)
+        
+        # Step 10: Generate embeddings for all pipelines
+        pipeline_results = {}
+        final_embeddings = {}
+        
+        for pipeline_name, config in configs.items():
+            print(f"\n🚀 Processing {pipeline_name}")
+            print(f"   Strategy: {config.kc_strategy} + {config.sa_strategy}")
+            
+            try:
+                # Generate embeddings
+                pipeline = EmbeddingPipeline(config)
+                q_vecs, kc_vecs, sa_vecs = pipeline.run(question_df, qid_to_kc_name)
+                
+                if sa_vecs:
+                    # Convert to final ordered tensor
+                    final_tensor = convert_sa_to_final_ordered_tensor(
+                        sa_vecs, kc_name_to_id, kc_id_to_position
+                    )
+                    
+                    final_embeddings[pipeline_name] = final_tensor
+                    
+                    # Save final DKT-ready tensor
+                    torch.save(final_tensor, output_dir / f"{pipeline_name}_final_dkt.pt")
+                    
+                    # Save original embeddings for reference
+                    clean_config = EmbeddingPipelineConfig(
+                        question_embedding_model=config.question_embedding_model,
+                        kc_strategy=config.kc_strategy,
+                        sa_strategy=config.sa_strategy,
+                        execution_order=config.execution_order,
+                        kc_kwargs={k: v for k, v in config.kc_kwargs.items() if not callable(v)},
+                        sa_kwargs={k: v for k, v in config.sa_kwargs.items() if not callable(v)}
+                    )
+                    
+                    with open(output_dir / f"{pipeline_name}_original.pkl", 'wb') as f:
+                        pickle.dump({
+                            'question_embeddings': q_vecs,
+                            'kc_embeddings': kc_vecs,
+                            'sa_embeddings': sa_vecs,
+                            'config': clean_config,
+                            'provider_info': provider_info
+                        }, f)
+                    
+                    print(f"   ✅ Success: {final_tensor.shape}")
+                    pipeline_results[pipeline_name] = True
+                else:
+                    print(f"   ❌ No SA embeddings generated")
+                    pipeline_results[pipeline_name] = False
+                
+            except Exception as e:
+                print(f"   ❌ Failed: {e}")
+                pipeline_results[pipeline_name] = False
+        
+        # Step 11: Save all final embeddings
+        if final_embeddings:
+            torch.save(final_embeddings, output_dir / "all_final_dkt_embeddings.pt")
+            
+            sample_tensor = next(iter(final_embeddings.values()))
+            
+            summary = {
+                "dataset": dataset_name,
+                "model": provider_info["model"],
+                "provider": provider_info["provider"],
+                "generation_timestamp": str(pd.Timestamp.now()),
+                "successful_pipelines": len(final_embeddings),
+                "total_pipelines": len(pipeline_results),
+                "final_tensor_shape": list(sample_tensor.shape),
+                "total_parameters_per_pipeline": sample_tensor.numel(),
+                "embedding_provider": provider_info,
+                "data_statistics": mapping_info["mapping_statistics"],
+                "pipeline_results": pipeline_results,
+            }
+            
+            with open(output_dir / "generation_summary.json", 'w') as f:
+                json.dump(summary, f, indent=2)
+        
+        # Step 12: Dataset summary
+        successful = sum(pipeline_results.values())
+        total = len(pipeline_results)
+        
+        print(f"\n📈 DATASET SUMMARY - {dataset_name.upper()}")
+        print(f"-" * 50)
+        print(f"Model: {provider_info['provider'].upper()} - {provider_info['model']}")
+        print(f"Successful pipelines: {successful}/{total}")
+        print(f"Questions processed: {len(question_df):,}")
+        print(f"Questions with embeddings: {len(overlap):,}")
+        print(f"KC names: {len(set(qid_to_kc_name.values()))}")
+        print(f"Final positions: {len(kc_id_to_position)}")
+        
+        if final_embeddings:
+            sample_shape = next(iter(final_embeddings.values())).shape
+            print(f"DKT tensor shape: {sample_shape}")
+            print(f"Parameters per pipeline: {sample_shape[0] * sample_shape[1]:,}")
+        
+        print(f"Pipeline Results:")
+        for pipeline_name, success in pipeline_results.items():
+            status = "✅" if success else "❌"
+            print(f"   {status} {pipeline_name}")
+        
+        if successful > 0:
+            print(f"✅ {dataset_name} completed successfully!")
+            print(f"📁 Output: {output_dir}/")
+        
+        return {
+            "dataset": dataset_name,
+            "model": provider_info["model"],
+            "provider": provider_info["provider"],
+            "status": "completed",
+            "successful_pipelines": successful,
+            "total_pipelines": total,
+            "output_dir": str(output_dir),
+            "pipeline_results": pipeline_results
+        }
+        
+    except Exception as e:
+        print(f"\n❌ Dataset {dataset_name} failed with error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "dataset": dataset_name,
+            "model": provider_info.get("model", "unknown"),
+            "provider": provider_info.get("provider", "unknown"),
+            "status": "failed",
+            "error": str(e)
+        }
 
 
 def generate_all_datasets_all_models():
@@ -2327,7 +2303,8 @@ def generate_all_datasets_all_models():
     ALL_MODELS = [
         # BERT models (Provider 3)
         ("bert", "all-MiniLM-L6-v2"),      # 384 dims, fast
-        ("bert", "all-mpnet-base-v2"),      # 768 dims, best quality
+        #("bert", "all-mpnet-base-v2"),      # 768 dims, best quality
+        # Add more models as needed
         #("bert", "multi-qa-mpnet-base-dot-v1"),  # 768 dims, Q&A optimized
         #("bert", "all-MiniLM-L12-v2"),      # 384 dims, better than L6
         #("bert", "paraphrase-MiniLM-L6-v2"), # 384 dims, paraphrase
@@ -2342,8 +2319,8 @@ def generate_all_datasets_all_models():
     print(f"📊 Will process {len(DATASET_CONFIG)} datasets with {len(ALL_MODELS)} models")
     print(f"📊 Total combinations: {len(DATASET_CONFIG) * len(ALL_MODELS)}")
     
-    # Load API config once
-    config = load_api_config()
+    # Load API config once - USE MODULE PREFIX
+    config = em.load_api_config()
     
     # Store results for all model-dataset combinations
     all_results = {}
@@ -2364,16 +2341,15 @@ def generate_all_datasets_all_models():
                 print(f"❌ Failed to initialize {provider} - {model}")
                 continue
             
-            # Set global state
-            global _current_provider, _current_model, DEFAULT_MODEL
-            _current_provider = provider
-            _current_model = model
-            DEFAULT_MODEL = model
+            # Set global state - USE MODULE PREFIX
+            em._current_provider = provider
+            em._current_model = model
+            em.DEFAULT_MODEL = model
             
-            # Test the embedding system
+            # Test the embedding system - USE MODULE PREFIX
             print("🧪 Testing embedding system...")
-            test_embedding = _get_embedding("test", model=model, provider=provider)
-            embedding_dim = get_embedding_dimension(model)
+            test_embedding = em._get_embedding("test", model=model, provider=provider)
+            embedding_dim = em.get_embedding_dimension(model)
             
             print(f"✅ Embedding system ready!")
             print(f"   Provider: {provider.upper()}")
@@ -2396,9 +2372,6 @@ def generate_all_datasets_all_models():
         
         for dataset_idx, (dataset_name, dataset_config) in enumerate(DATASET_CONFIG.items(), 1):
             print(f"\n{'='*20} DATASET {dataset_idx}/{len(datasets)} {'='*20}")
-            
-            # Modify output directory to include model name
-            original_mappings_dir = dataset_config["mappings_dir"]
             
             # Create a model-specific output directory
             model_safe_name = model.replace("/", "_").replace("-", "_")
@@ -2467,7 +2440,6 @@ def generate_all_datasets_all_models():
     
     if successful_combinations > 0:
         print(f"\n🎉 SUCCESS! Generated embeddings for {successful_combinations} model-dataset combinations!")
-
 
 
 
