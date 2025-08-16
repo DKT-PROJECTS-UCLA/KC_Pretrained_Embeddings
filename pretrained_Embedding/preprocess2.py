@@ -91,6 +91,18 @@ def create_mappings_from_question_csv(
             assist_df['problem_id'] = assist_df['problem_id'].fillna(-1).astype(int)
             assist_df.loc[assist_df['problem_id'] == -1, 'problem_id'] = None
     
+    # Handle ASSIST 2009 multiple skill IDs (e.g., "2_37_70" → use "2")
+    if 'skill_id' in assist_df.columns:
+        # Check if any skill_id contains underscore
+        if assist_df['skill_id'].astype(str).str.contains('_').any():
+            logger.info("ASSIST 2009 detected: Handling multiple skill IDs (e.g., '2_37_70')")
+            # Extract first skill ID from multi-skill format
+            assist_df['skill_id'] = assist_df['skill_id'].astype(str).str.split('_').str[0]
+            logger.info(f"Sample cleaned skill IDs: {assist_df['skill_id'].dropna().head().tolist()}")
+        
+        # Convert to numeric after cleaning
+        assist_df['skill_id'] = pd.to_numeric(assist_df['skill_id'], errors='coerce')
+    
     # Find and rename skill column
     skill_id_col = None
     for col in ['skill_id', 'skill', 'sequence_id']:
@@ -419,7 +431,7 @@ if __name__ == "__main__":
     
     # Run preprocess.py first
     print("Running preprocess.py...")
-    #subprocess.run(['python', 'preprocess.py'])
+    # subprocess.run(['python', 'preprocess.py'])
     print("Preprocess.py completed!\n")
     
     # Define the lists
