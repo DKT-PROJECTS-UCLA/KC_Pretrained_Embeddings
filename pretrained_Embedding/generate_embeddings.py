@@ -259,6 +259,13 @@ def check_requirements():
         raise RuntimeError(f"❌ Embedding system setup failed: {e}")
 
 
+# DATASET_CONFIG = {
+#     "assist2009": {
+#         "mappings_dir": "mappings_output2009",
+#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+#         "mapping_format": "standard"  # kc_name -> kc_id -> position
+#     }
+# }
 DATASET_CONFIG = {
     "assist2009": {
         "mappings_dir": "mappings_output2009",
@@ -276,31 +283,6 @@ DATASET_CONFIG = {
         "mapping_format": "direct"  # skill_name -> position directly
     }
 }
-
-# DATASET_CONFIG = {
-#     "assist2017": {
-#         "mappings_dir": "mappings_output2017",
-#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json",
-#         "mapping_format": "direct"  # skill_name -> position directly
-#     }
-# }
-
-
-# DATASET_CONFIG = {
-#     "assist2009": {
-#         "mappings_dir": "mappings_output2009",
-#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
-#     },
-#     "assist2012": {
-#         "mappings_dir": "mappings_output2012", 
-#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json"
-#     },
-#     "assist2017": {
-#         "mappings_dir": "mappings_output2017",
-#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
-#     }
-# }
-
 
 def process_single_dataset(dataset_name: str, dataset_config: dict, provider_info: dict):
     """
@@ -1089,108 +1071,6 @@ def validate_direct_mapping(
     return is_valid
 
 
-# def validate_your_mapping_chain(
-#     qid_to_kc_name: Dict[str, str],
-#     kc_name_to_id: Dict[str, int], 
-#     kc_id_to_position: Dict[str, int]
-# ) -> bool:
-#     """
-#     Validate your complete mapping chain.
-#     FIXED: Handle both with and without .0 suffix in keyid2idx
-#     """
-    
-#     print(f"\n🔍 Validating mapping chain...")
-    
-#     # Get unique KC names from questions
-#     data_kc_names = set(qid_to_kc_name.values())
-#     mapping_kc_names = set(kc_name_to_id.keys())
-    
-#     # Get KC IDs - create both formats
-#     mapped_kc_ids_raw = set(str(kc_id) for kc_id in kc_name_to_id.values())
-#     position_kc_ids = set(kc_id_to_position.keys())
-    
-#     # Determine format used in keyid2idx (check if any have .0 suffix)
-#     uses_decimal_format = any('.0' in kid for kid in position_kc_ids)
-    
-#     # Convert mapped IDs to match the format
-#     if uses_decimal_format:
-#         # Add .0 suffix to mapped IDs
-#         mapped_kc_ids = set(f"{kid}.0" if '.' not in kid else kid for kid in mapped_kc_ids_raw)
-#     else:
-#         # Use IDs as-is (no .0 suffix)
-#         mapped_kc_ids = mapped_kc_ids_raw
-    
-#     print(f"   KC names in questions: {len(data_kc_names)}")
-#     print(f"   KC names with ID mappings: {len(mapping_kc_names)}")
-#     print(f"   KC IDs from mappings: {len(mapped_kc_ids)}")
-#     print(f"   KC IDs with positions: {len(position_kc_ids)}")
-#     print(f"   Format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
-    
-#     # Check for missing mappings
-#     missing_kc_names = data_kc_names - mapping_kc_names
-#     missing_kc_ids = mapped_kc_ids - position_kc_ids
-    
-#     # Calculate coverage
-#     kc_name_coverage = len(data_kc_names - missing_kc_names) / len(data_kc_names) * 100 if data_kc_names else 0
-#     kc_id_coverage = len(mapped_kc_ids - missing_kc_ids) / len(mapped_kc_ids) * 100 if mapped_kc_ids else 0
-    
-#     print(f"   KC name coverage: {kc_name_coverage:.1f}%")
-#     print(f"   KC ID coverage: {kc_id_coverage:.1f}%")
-    
-#     # Rest of the function continues as before...
-#     # More flexible validation - allow partial coverage
-#     is_valid = True
-#     min_coverage_threshold = 80.0  # Require at least 80% coverage
-    
-#     if missing_kc_names:
-#         print(f"   ⚠️  KC names without ID mappings: {len(missing_kc_names)}")
-#         if len(missing_kc_names) <= 5:
-#             print(f"      {list(missing_kc_names)}")
-#         else:
-#             print(f"      {list(missing_kc_names)[:5]} ... and {len(missing_kc_names)-5} more")
-        
-#         if kc_name_coverage < min_coverage_threshold:
-#             print(f"   ❌ KC name coverage too low: {kc_name_coverage:.1f}% < {min_coverage_threshold}%")
-#             is_valid = False
-#         else:
-#             print(f"   ⚠️  KC name coverage acceptable: {kc_name_coverage:.1f}%")
-    
-#     if missing_kc_ids:
-#         print(f"   ⚠️  KC IDs without positions: {len(missing_kc_ids)}")
-#         if len(missing_kc_ids) <= 10:
-#             print(f"      {list(missing_kc_ids)}")
-#         else:
-#             print(f"      {list(missing_kc_ids)[:10]} ... and {len(missing_kc_ids)-10} more")
-        
-#         if kc_id_coverage < min_coverage_threshold:
-#             print(f"   ❌ KC ID coverage too low: {kc_id_coverage:.1f}% < {min_coverage_threshold}%")
-#             is_valid = False
-#         else:
-#             print(f"   ⚠️  KC ID coverage acceptable: {kc_id_coverage:.1f}%")
-    
-#     if is_valid and len(missing_kc_names) == 0 and len(missing_kc_ids) == 0:
-#         print(f"   ✅ Perfect mapping chain validated!")
-#     elif is_valid:
-#         print(f"   ✅ Acceptable mapping chain validated with partial coverage!")
-#         print(f"   📝 Will proceed with available mappings")
-#     else:
-#         print(f"   ❌ Mapping chain validation failed - coverage too low")
-    
-#     # Show mapping statistics
-#     total_questions = len(qid_to_kc_name)
-#     total_kc_names = len(data_kc_names)
-#     total_positions = len(kc_id_to_position)
-    
-#     print(f"\n📊 Mapping Statistics:")
-#     print(f"   Total questions: {total_questions:,}")
-#     print(f"   Unique KC names: {total_kc_names}")
-#     print(f"   Final positions: {total_positions}")
-#     if kc_id_to_position:
-#         print(f"   Max position: {max(kc_id_to_position.values())}")
-    
-#     return is_valid
-
-
 def validate_your_mapping_chain(
     qid_to_kc_name: Dict[str, str],
     kc_name_to_id: Dict[str, int], 
@@ -1342,6 +1222,126 @@ def create_question_df_from_csv(
     return question_df
 
 
+# def convert_sa_to_final_ordered_tensor(
+#     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
+#     kc_name_to_id: Dict[str, int],
+#     kc_id_to_position: Dict[str, int],
+#     verbose: bool = True
+# ) -> torch.Tensor:
+#     """
+#     Convert SA embeddings to final ordered tensor using your exact mappings.
+#     FIXED: Handles numeric IDs, string IDs, and .0 suffix formats
+#     """
+    
+#     # Detect ID format from kc_name_to_id
+#     sample_kc_id = next(iter(kc_name_to_id.values())) if kc_name_to_id else None
+#     is_string_id = isinstance(sample_kc_id, str)
+    
+#     # Detect if positions use .0 suffix (only relevant for numeric IDs)
+#     uses_decimal_format = False
+#     if not is_string_id and kc_id_to_position:
+#         uses_decimal_format = any('.0' in str(kid) for kid in kc_id_to_position.keys())
+    
+#     # Filter out non-tensor SA embeddings
+#     tensor_sa_embeddings = {}
+#     string_sa_embeddings = {}
+    
+#     for key, value in sa_embeddings.items():
+#         if isinstance(value, torch.Tensor):
+#             tensor_sa_embeddings[key] = value
+#         elif isinstance(value, str):
+#             string_sa_embeddings[key] = value
+    
+#     if verbose:
+#         print(f"🔍 SA embeddings analysis:")
+#         print(f"   Tensor embeddings: {len(tensor_sa_embeddings)}")
+#         print(f"   String embeddings: {len(string_sa_embeddings)} (add_words strategy)")
+#         print(f"   ID type: {'string' if is_string_id else 'numeric'}")
+#         if not is_string_id:
+#             print(f"   Position format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
+    
+#     # Handle add_words strategy
+#     if len(tensor_sa_embeddings) == 0 and len(string_sa_embeddings) > 0:
+#         print(f"⚠️  SA embeddings are in text format (add_words strategy)")
+#         max_position = max(kc_id_to_position.values())
+#         tensor_size = max_position + 1
+#         embedding_dim = 384
+#         dummy_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+#         return dummy_tensor
+    
+#     if len(tensor_sa_embeddings) == 0:
+#         raise ValueError("No valid tensor embeddings found in SA embeddings")
+    
+#     # Determine tensor size
+#     max_position = max(kc_id_to_position.values())
+#     tensor_size = max_position + 1
+    
+#     # Get embedding dimension
+#     sample_embedding = next(iter(tensor_sa_embeddings.values()))
+#     embedding_dim = sample_embedding.shape[0]
+    
+#     # Create ordered tensor
+#     ordered_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+    
+#     # Track placements
+#     placed_correct = 0
+#     placed_incorrect = 0
+#     failed_placements = []
+    
+#     # Process each tensor SA embedding
+#     for (kc_name, is_correct), embedding in tensor_sa_embeddings.items():
+        
+#         # KC name -> KC ID
+#         if kc_name not in kc_name_to_id:
+#             failed_placements.append(f"KC name '{kc_name}' not found in kc_name_to_id")
+#             continue
+        
+#         kc_id = kc_name_to_id[kc_name]
+        
+#         # Format KC ID to match kc_id_to_position format
+#         if is_string_id:
+#             # For ASSIST2017: kc_id is already a string (skill_name)
+#             kc_id_str = str(kc_id)
+#         else:
+#             # For numeric IDs (ASSIST2009, ASSIST2012)
+#             if uses_decimal_format:
+#                 kc_id_str = f"{kc_id}.0"
+#             else:
+#                 kc_id_str = str(kc_id)
+        
+#         # KC ID -> position
+#         if kc_id_str not in kc_id_to_position:
+#             failed_placements.append(f"KC ID '{kc_id_str}' (from '{kc_name}') not found in concepts")
+#             continue
+        
+#         position = kc_id_to_position[kc_id_str]
+        
+#         # Place in tensor
+#         if is_correct:
+#             ordered_tensor[position] = embedding
+#             placed_correct += 1
+#         else:
+#             ordered_tensor[tensor_size + position] = embedding
+#             placed_incorrect += 1
+    
+#     if verbose:
+#         print(f"✅ Created final ordered tensor: {ordered_tensor.shape}")
+#         print(f"   Tensor layout: [{tensor_size}, {embedding_dim}] × 2")
+#         print(f"   Rows 0-{tensor_size-1}: Correct embeddings by keyid2idx position")
+#         print(f"   Rows {tensor_size}-{2*tensor_size-1}: Incorrect embeddings by keyid2idx position")
+#         print(f"   Successfully placed correct: {placed_correct}")
+#         print(f"   Successfully placed incorrect: {placed_incorrect}")
+#         print(f"   Total parameters: {ordered_tensor.numel():,}")
+        
+#         if failed_placements:
+#             print(f"⚠️  Failed placements: {len(failed_placements)}")
+#             for failure in failed_placements[:3]:
+#                 print(f"      {failure}")
+#             if len(failed_placements) > 3:
+#                 print(f"      ... and {len(failed_placements)-3} more")
+    
+#     return ordered_tensor
+
 def convert_sa_to_final_ordered_tensor(
     sa_embeddings: Dict[Tuple[str, bool], torch.Tensor],
     kc_name_to_id: Dict[str, int],
@@ -1349,15 +1349,15 @@ def convert_sa_to_final_ordered_tensor(
     verbose: bool = True
 ) -> torch.Tensor:
     """
-    Convert SA embeddings to final ordered tensor using your exact mappings.
-    FIXED: Handles numeric IDs, string IDs, and .0 suffix formats
+    Convert SA embeddings to final ordered tensor.
+    UPDATED: Use random embeddings for missing KCs instead of zeros
     """
     
-    # Detect ID format from kc_name_to_id
+    # Detect ID format
     sample_kc_id = next(iter(kc_name_to_id.values())) if kc_name_to_id else None
     is_string_id = isinstance(sample_kc_id, str)
     
-    # Detect if positions use .0 suffix (only relevant for numeric IDs)
+    # Detect if positions use .0 suffix
     uses_decimal_format = False
     if not is_string_id and kc_id_to_position:
         uses_decimal_format = any('.0' in str(kid) for kid in kc_id_to_position.keys())
@@ -1376,8 +1376,10 @@ def convert_sa_to_final_ordered_tensor(
         print(f"🔍 SA embeddings analysis:")
         print(f"   Tensor embeddings: {len(tensor_sa_embeddings)}")
         print(f"   String embeddings: {len(string_sa_embeddings)} (add_words strategy)")
-        print(f"   ID type: {'string' if is_string_id else 'numeric'}")
-        if not is_string_id:
+        if is_string_id:
+            print(f"   ID type: string")
+        else:
+            print(f"   ID type: numeric")
             print(f"   Position format: {'with .0 suffix' if uses_decimal_format else 'without .0 suffix'}")
     
     # Handle add_words strategy
@@ -1386,7 +1388,12 @@ def convert_sa_to_final_ordered_tensor(
         max_position = max(kc_id_to_position.values())
         tensor_size = max_position + 1
         embedding_dim = 384
-        dummy_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+        
+        # CHANGED: Use random instead of zeros
+        dummy_tensor = torch.randn(2 * tensor_size, embedding_dim, dtype=torch.float32)
+        # Normalize to match typical embedding distribution
+        dummy_tensor = dummy_tensor * 0.1  # Scale down to typical embedding magnitude
+        
         return dummy_tensor
     
     if len(tensor_sa_embeddings) == 0:
@@ -1396,12 +1403,21 @@ def convert_sa_to_final_ordered_tensor(
     max_position = max(kc_id_to_position.values())
     tensor_size = max_position + 1
     
-    # Get embedding dimension
+    # Get embedding dimension and statistics from existing embeddings
     sample_embedding = next(iter(tensor_sa_embeddings.values()))
     embedding_dim = sample_embedding.shape[0]
     
-    # Create ordered tensor
-    ordered_tensor = torch.zeros(2 * tensor_size, embedding_dim, dtype=torch.float32)
+    # ADDED: Calculate statistics from existing embeddings for better random initialization
+    all_embeddings = torch.stack(list(tensor_sa_embeddings.values()))
+    embed_mean = all_embeddings.mean()
+    embed_std = all_embeddings.std()
+    
+    # CHANGED: Initialize with random values matching the distribution of real embeddings
+    ordered_tensor = torch.randn(2 * tensor_size, embedding_dim, dtype=torch.float32)
+    ordered_tensor = ordered_tensor * embed_std + embed_mean
+    
+    # Track which positions we'll fill with real embeddings
+    filled_positions = set()
     
     # Track placements
     placed_correct = 0
@@ -1420,10 +1436,8 @@ def convert_sa_to_final_ordered_tensor(
         
         # Format KC ID to match kc_id_to_position format
         if is_string_id:
-            # For ASSIST2017: kc_id is already a string (skill_name)
             kc_id_str = str(kc_id)
         else:
-            # For numeric IDs (ASSIST2009, ASSIST2012)
             if uses_decimal_format:
                 kc_id_str = f"{kc_id}.0"
             else:
@@ -1436,13 +1450,19 @@ def convert_sa_to_final_ordered_tensor(
         
         position = kc_id_to_position[kc_id_str]
         
-        # Place in tensor
+        # Place in tensor (overwriting the random values)
         if is_correct:
             ordered_tensor[position] = embedding
             placed_correct += 1
+            filled_positions.add(position)
         else:
             ordered_tensor[tensor_size + position] = embedding
             placed_incorrect += 1
+            filled_positions.add(tensor_size + position)
+    
+    # ADDED: Count how many positions have random vs real embeddings
+    total_positions = tensor_size * 2
+    random_positions = total_positions - len(filled_positions)
     
     if verbose:
         print(f"✅ Created final ordered tensor: {ordered_tensor.shape}")
@@ -1451,6 +1471,9 @@ def convert_sa_to_final_ordered_tensor(
         print(f"   Rows {tensor_size}-{2*tensor_size-1}: Incorrect embeddings by keyid2idx position")
         print(f"   Successfully placed correct: {placed_correct}")
         print(f"   Successfully placed incorrect: {placed_incorrect}")
+        print(f"   Positions with real embeddings: {len(filled_positions)}")
+        print(f"   Positions with random embeddings: {random_positions}")
+        print(f"   Random embedding stats: mean={embed_mean:.3f}, std={embed_std:.3f}")
         print(f"   Total parameters: {ordered_tensor.numel():,}")
         
         if failed_placements:
