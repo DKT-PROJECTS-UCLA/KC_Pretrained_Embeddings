@@ -64,6 +64,7 @@ PROVIDER_MODELS = {
     "cohere": {
         "default": "embed-english-v3.0",
         "models": [
+            "embed-v4.0",           # 1536 dims
             "embed-english-v3.0",           # 1024 dims
             "embed-english-light-v3.0",     # 384 dims
             "embed-multilingual-v3.0",      # 1024 dims
@@ -281,7 +282,7 @@ def _get_embedding(text: str, *, model: str, provider: str) -> torch.Tensor:
         
     elif provider == "cohere":
         client = _provider_clients["cohere"]
-        resp = client.embed(texts=[text], model=model, input_type="search_document")
+        resp = client.embed(texts=[text], model=model, input_type="classification",embedding_types=["float"])
         vec = resp.embeddings[0]
         return torch.tensor(vec, dtype=torch.float32)
         
@@ -454,6 +455,7 @@ def get_embedding_dimension(model: str | None = None) -> int:
         "text-embedding-ada-002": 1536,
         
         # Cohere  
+        "embed-v4.0": 1536,
         "embed-english-v3.0": 1024,
         "embed-english-light-v3.0": 384,
         "embed-multilingual-v3.0": 1024,

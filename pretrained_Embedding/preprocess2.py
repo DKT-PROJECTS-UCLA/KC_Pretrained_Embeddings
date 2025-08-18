@@ -436,15 +436,15 @@ if __name__ == "__main__":
     
     # Define the lists
     assist_datas = [
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2009/skill_builder_data_corrected_collapsed.csv',
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2012/2012-2013-data-with-predictions-4-final.csv',
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2017/anonymized_full_release_competition_dataset.csv'
+        '../pretrained_Embedding/data_subsets/assist2009/skill_builder_data_corrected_collapsed.csv',
+        '../pretrained_Embedding/data_subsets/assist2012/2012-2013-data-with-predictions-4-final.csv',
+        '../pretrained_Embedding/data_subsets/assist2017/anonymized_full_release_competition_dataset.csv'
     ]
 
     question_csvs = [
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2009/questions.csv',
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2012/questions.csv',
-        '/home/mahdi/Projects/pykt-toolkit-pt_emb/pretrained_Embedding/data_subsets/assist2017/questions.csv'
+        '../pretrained_Embedding/data_subsets/assist2009/questions.csv',
+        '../pretrained_Embedding/data_subsets/assist2012/questions.csv',
+        '../pretrained_Embedding/data_subsets/assist2017/questions.csv'
     ]
     
     # Output directories

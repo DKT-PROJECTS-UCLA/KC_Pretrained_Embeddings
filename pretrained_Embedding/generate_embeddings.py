@@ -86,7 +86,7 @@ def load_your_data(data_dir: str = "./my_data",
 
 # def load_assist2017_mappings(
 #     mappings_dir: str = "mappings_output2017",
-#     keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
+#     keyid2idx_path: str = "../data/assist2017/keyid2idx.json"
 # ) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
 #     """
 #     Special loader for ASSIST2017 which uses skill_name -> position mapping.
@@ -146,7 +146,7 @@ def load_your_data(data_dir: str = "./my_data",
 
 def load_assist2017_mappings(
     mappings_dir: str = "mappings_output2017",
-    keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json"
+    keyid2idx_path: str = "../data/assist2017/keyid2idx.json"
 ) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
     """
     Special loader for ASSIST2017 which uses skill_name as bridge.
@@ -262,24 +262,24 @@ def check_requirements():
 # DATASET_CONFIG = {
 #     "assist2009": {
 #         "mappings_dir": "mappings_output2009",
-#         "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+#         "keyid2idx_path": "../data/assist2009/keyid2idx.json",
 #         "mapping_format": "standard"  # kc_name -> kc_id -> position
 #     }
 # }
 DATASET_CONFIG = {
     "assist2009": {
         "mappings_dir": "mappings_output2009",
-        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+        "keyid2idx_path": "../data/assist2009/keyid2idx.json",
         "mapping_format": "standard"  # kc_name -> kc_id -> position
     },
     "assist2012": {
         "mappings_dir": "mappings_output2012", 
-        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2012/keyid2idx.json",
+        "keyid2idx_path": "../data/assist2012/keyid2idx.json",
         "mapping_format": "standard"  # kc_name -> kc_id -> position
     },
     "assist2017": {
         "mappings_dir": "mappings_output2017",
-        "keyid2idx_path": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2017/keyid2idx.json",
+        "keyid2idx_path": "../data/assist2017/keyid2idx.json",
         "mapping_format": "direct"  # skill_name -> position directly
     }
 }
@@ -828,7 +828,7 @@ def load_and_use_embeddings(pipeline_name="pipeline_1"):
 
 def load_your_complete_mappings(
     mappings_dir: str = "mappings_output",
-    keyid2idx_path: str = "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json"
+    keyid2idx_path: str = "../data/assist2009/keyid2idx.json"
 ) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, int]]:
     """
     Load all mappings from your file structure.
@@ -1765,7 +1765,7 @@ def generate_final_embeddings_with_debug():
         "source_files": {
             "qid_to_kc": "mappings_output/qid_to_kc.json",
             "kc_name_to_id": "mappings_output/kc_name_to_id.json", 
-            "concepts": "/home/mahdi/Projects/pykt-toolkit-pt_emb/data/assist2009/keyid2idx.json",
+            "concepts": "../data/assist2009/keyid2idx.json",
             "questions": "mappings_output/questions_with_kc.csv"
         },
         "mapping_statistics": {
@@ -2326,17 +2326,20 @@ def generate_all_datasets_all_models():
     ALL_MODELS = [
         # BERT models (Provider 3)
         ("bert", "all-MiniLM-L6-v2"),      # 384 dims, fast
-        #("bert", "all-mpnet-base-v2"),      # 768 dims, best quality
+        ("bert", "all-mpnet-base-v2"),      # 768 dims, best quality
         # Add more models as needed
-        #("bert", "multi-qa-mpnet-base-dot-v1"),  # 768 dims, Q&A optimized
-        #("bert", "all-MiniLM-L12-v2"),      # 384 dims, better than L6
-        #("bert", "paraphrase-MiniLM-L6-v2"), # 384 dims, paraphrase
+        ("bert", "multi-qa-mpnet-base-dot-v1"),  # 768 dims, Q&A optimized
+        ("bert", "all-MiniLM-L12-v2"),      # 384 dims, better than L6
+        ("bert", "paraphrase-MiniLM-L6-v2"), # 384 dims, paraphrase
         
         # Uncomment these if you want to use API-based models
-        # ("openai", "text-embedding-3-small"),  # 1536 dims
-        # ("openai", "text-embedding-3-large"),  # 3072 dims
-        # ("cohere", "embed-english-v3.0"),      # 1024 dims
-        # ("cohere", "embed-english-light-v3.0"), # 384 dims
+        ("openai", "text-embedding-3-small"),  # 1536 dims
+        ("openai", "text-embedding-3-large"),  # 3072 dims
+        ("openai", "text-embedding-ada-002"),  # 3072 dims
+        	
+        ("cohere", "embed-v4.0"),      # 1536 dims
+        ("cohere", "embed-english-v3.0"),      # 1024 dims
+        ("cohere", "embed-multilingual-v3.0"), # 384 dims
     ]
     
     print(f"📊 Will process {len(DATASET_CONFIG)} datasets with {len(ALL_MODELS)} models")
