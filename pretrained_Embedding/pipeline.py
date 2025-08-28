@@ -129,7 +129,11 @@ class EmbeddingPipeline:
 
             else:  # pragma: no cover
                 raise AssertionError(f"Unknown stage '{stage}' encountered.")
-
+        if self.cfg.sa_strategy == "add_words":
+            # For add_words, the actual tensor embeddings are in KC stage output
+            if "kc" in stage_outputs and self._is_modified_questions_dict(stage_outputs["kc"]):
+                stage_outputs["sa"] = stage_outputs["kc"]
+                stage_outputs["kc"] = {}  # Clear KC since it's really SA
         # Hand back everything we generated (missing ones will default to {})
         return (
             stage_outputs.get("question", {}),
@@ -214,6 +218,7 @@ class EmbeddingPipeline:
             # Standard KC processing after questions
             return self._handle_kc_standard(qid_to_kc, stage_outputs)
 
+
     def _handle_kc_with_modified_questions(self, qid_to_kc: Dict[Hashable, Hashable], modified_q_embs: dict) -> dict:
         """Handle KC generation when working with modified question embeddings."""
         
@@ -260,6 +265,7 @@ class EmbeddingPipeline:
         _logger.info(f"Generated KC embeddings for {len(kc_to_qids)} KCs (correct + incorrect versions)")
         return kc_vecs
 
+
     def _handle_kc_stuff_window_first(self, question_df: pd.DataFrame, qid_to_kc: Dict[Hashable, Hashable], stage_outputs: dict) -> dict:
         """Handle stuff_window when KC comes first (normal stuff_window, not add_words)."""
         
@@ -285,63 +291,6 @@ class EmbeddingPipeline:
         
         return kc_vecs
 
-    # def _handle_kc_stuff_window_after_sa(self, qid_to_kc: Dict[Hashable, Hashable], stage_outputs: dict) -> dict:
-    #     """Handle stuff_window when SA (add_words) comes first - Pipeline 9."""
-        
-    #     if "sa" not in stage_outputs or not isinstance(stage_outputs["sa"], dict):
-    #         raise RuntimeError("Expected SA stage to have created modified question texts")
-        
-    #     # SA created modified question texts
-    #     modified_questions = stage_outputs["sa"]
-        
-    #     # Separate correct and incorrect question texts
-    #     correct_texts = {qid: text for (qid, is_correct), text in modified_questions.items() if is_correct}
-    #     incorrect_texts = {qid: text for (qid, is_correct), text in modified_questions.items() if not is_correct}
-        
-    #     # Build KC mappings
-    #     kc_to_qids: Dict[Hashable, list] = {}
-    #     for qid, kc in qid_to_kc.items():
-    #         kc_to_qids.setdefault(kc, []).append(qid)
-        
-    #     kc_vecs = {}
-        
-    #     # Process each KC for both correct and incorrect versions using stuff_window
-    #     for kc_id, qids in kc_to_qids.items():
-            
-    #         # CORRECT KC embedding using stuff_window on correct texts
-    #         correct_qids_for_kc = [qid for qid in qids if qid in correct_texts]
-    #         if correct_qids_for_kc:
-    #             # Create temporary DataFrame for correct texts
-    #             correct_data = [{'question_id': qid, 'question_text': correct_texts[qid]} 
-    #                           for qid in correct_qids_for_kc]
-    #             correct_df = pd.DataFrame(correct_data)
-                
-    #             kc_vecs[(kc_id, True)] = self._kc_fn(
-    #                 f"{kc_id}_correct",
-    #                 correct_qids_for_kc,
-    #                 {},  # empty question_embeddings
-    #                 question_df=correct_df,
-    #                 **self.cfg.kc_kwargs,
-    #             )
-            
-    #         # INCORRECT KC embedding using stuff_window on incorrect texts
-    #         incorrect_qids_for_kc = [qid for qid in qids if qid in incorrect_texts]
-    #         if incorrect_qids_for_kc:
-    #             # Create temporary DataFrame for incorrect texts
-    #             incorrect_data = [{'question_id': qid, 'question_text': incorrect_texts[qid]} 
-    #                             for qid in incorrect_qids_for_kc]
-    #             incorrect_df = pd.DataFrame(incorrect_data)
-                
-    #             kc_vecs[(kc_id, False)] = self._kc_fn(
-    #                 f"{kc_id}_incorrect", 
-    #                 incorrect_qids_for_kc,
-    #                 {},  # empty question_embeddings
-    #                 question_df=incorrect_df,
-    #                 **self.cfg.kc_kwargs,
-    #             )
-        
-    #     _logger.info(f"Generated stuff_window KC embeddings for {len(kc_to_qids)} KCs (correct + incorrect versions)")
-    #     return kc_vecs
 
     def _handle_kc_stuff_window_after_sa(self, qid_to_kc: Dict[Hashable, Hashable], stage_outputs: dict) -> dict:
         """Handle stuff_window when SA (add_words) comes first - Pipeline 9."""
@@ -402,7 +351,6 @@ class EmbeddingPipeline:
         
         _logger.info(f"Generated stuff_window KC embeddings for {len(kc_to_qids)} KCs (correct + incorrect versions)")
         return kc_vecs
-
 
 
     def _handle_kc_standard(self, qid_to_kc: Dict[Hashable, Hashable], stage_outputs: dict) -> dict:
@@ -535,3 +483,5 @@ class EmbeddingPipeline:
                 len(sample_key) == 2 and 
                 isinstance(sample_key[1], bool) and
                 (isinstance(sample_value, str) or isinstance(sample_value, torch.Tensor)))
+    
+
