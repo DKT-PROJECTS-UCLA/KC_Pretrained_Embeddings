@@ -1,0 +1,30 @@
+# ARCHIVE FILE
+program: wandb_dkt_train.py
+method: bayes
+metric:
+  goal: maximize
+  name: validauc
+parameters:
+  model_name:
+    values: ["dkt"]
+  dataset_name:
+    values: ["xes"]            # or assist2009
+  emb_type:
+    values: ["qid"]
+  save_dir:
+    values: ["models/dkt_tiaocan"]
+
+  learning_rate:
+    values: [0.01, 0.001, 0.0007, 0.0005, 0.002, 0.0002]   # shift LR downward
+  dropout:
+    values: [0.01, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5]         # real regularization
+
+  proj_dim:
+    values: [32, 64, 128, 256]
+
+  seed:
+    values: [ 42]                      # small seed ensemble
+
+  # keep fold fixed during HPO; evaluate best config on other folds afterward
+  fold:
+    values: [0,1,2,3,4]

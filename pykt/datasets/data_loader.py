@@ -134,8 +134,16 @@ class KTDataset(Dataset):
                 dori["qseqs"].append([int(_) for _ in row["questions"].split(",")])
             if "timestamps" in row:
                 dori["tseqs"].append([int(_) for _ in row["timestamps"].split(",")])
+            def _to_int(tok: str) -> int:
+                tok = tok.strip()
+                if tok == "" or tok.lower() == "nan":
+                    return 0  # or raise, depending on your preference
+                # Accept values like '472000', '472000.0', '4.72e5'
+                return int(float(tok))
+
             if "usetimes" in row:
-                dori["utseqs"].append([int(_) for _ in row["usetimes"].split(",")])
+                dori["utseqs"].append([_to_int(t) for t in row["usetimes"].split(",")])
+
                 
             dori["rseqs"].append([int(_) for _ in row["responses"].split(",")])
             dori["smasks"].append([int(_) for _ in row["selectmasks"].split(",")])

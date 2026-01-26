@@ -1,6 +1,6 @@
 # ARCHIVE FILE
 program: wandb_dkt_train.py
-method: grid
+method: bayes
 metric:
   goal: maximize
   name: validauc
@@ -23,25 +23,25 @@ parameters:
 
   # -------- Representation bottleneck (wider search) --------
   proj_dim:
-    values: [64, 256]
+    values: [8, 16, 24, 32, 48, 64, 96,128, 192,256]
 
   # -------- LSTM capacity --------
   hidden_size:
-    values: [256,512, 640]
+    values: [48, 64, 96, 128, 192,256,512]
 
   num_layers:
-    values: [1]
+    values: [1, 2,3,4]
 
   # -------- Regularization (2017 needs LOTS) --------
   dropout:
-    values: [ 0.65, 0.75]
+    values: [0.45, 0.55, 0.65, 0.75]
 
   l2:
-    values: [1e-6]
+    values: [0.0, 1e-6, 1e-5, 1e-4]
 
   # -------- Optimization (expanded search) --------
   learning_rate:
-    values: [5e-4]
+    values: [5e-5, 1e-4, 2e-4, 3e-4, 5e-4]
   seed:
     values: [42]
   fold:

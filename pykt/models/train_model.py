@@ -10,6 +10,10 @@ from .atkt import _l2_normalize_adv
 from ..utils.utils import debug_print
 from pykt.config import que_type_models
 import pandas as pd
+try:
+    import wandb
+except Exception:
+    wandb = None
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -36,7 +40,8 @@ def cal_loss(model, ys, r, rshft, sm, preloss=[]):
 
         y = torch.masked_select(ys[0], sm)
         t = torch.masked_select(rshft, sm)
-        loss = binary_cross_entropy(y.double(), t.double())
+        # loss = binary_cross_entropy(y.double(), t.double())
+        loss = binary_cross_entropy(y, t)
     elif model_name == "dkt+":
         y_curr = torch.masked_select(ys[1], sm)
         y_next = torch.masked_select(ys[0], sm)
@@ -65,6 +70,8 @@ def cal_loss(model, ys, r, rshft, sm, preloss=[]):
 
 
 def model_forward(model, data, rel=None):
+    model_name = model.model_name
+    device = next(model.parameters()).device   # <<< ADD THIS LINE
     model_name = model.model_name
     # if model_name in ["dkt_forget", "lpkt"]:
     #     q, c, r, qshft, cshft, rshft, m, sm, d, dshft = data
@@ -174,6 +181,24 @@ def model_forward(model, data, rel=None):
     if model_name not in ["atkt", "atktfix"]+que_type_models or model_name in ["lpkt", "rkt"]:
         loss = cal_loss(model, ys, r, rshft, sm, preloss)
     return loss
+
+
+def compute_avg_loss(model, loader, rel=None):
+    """Average loss over a dataloader without affecting training mode."""
+    was_training = model.training
+    if was_training:
+        model.eval()
+    losses = []
+    with torch.no_grad():
+        for data in loader:
+            if rel is not None:
+                loss = model_forward(model, data, rel)
+            else:
+                loss = model_forward(model, data)
+            losses.append(loss.detach().cpu().item())
+    if was_training:
+        model.train()
+    return float(np.mean(losses)) if losses else float("nan")
     
 
 def train_model(model, train_loader, valid_loader, num_epochs, opt, ckpt_path, test_loader=None, test_window_loader=None, save_model=False, data_config=None, fold=None):
@@ -225,10 +250,41 @@ def train_model(model, train_loader, valid_loader, num_epochs, opt, ckpt_path, t
         
         if model.model_name=='rkt':
             auc, acc = evaluate(model, valid_loader, model.model_name, rel)
+            valid_loss = compute_avg_loss(model, valid_loader, rel)
         else:
             auc, acc = evaluate(model, valid_loader, model.model_name)
+            if model.model_name in que_type_models and model.model_name not in ["lpkt"]:
+                valid_loss = float("nan")
+            else:
+                valid_loss = compute_avg_loss(model, valid_loader)
         ### atkt 有diff， 以下代码导致的
         ### auc, acc = round(auc, 4), round(acc, 4)
+        # ---- Compute DKT training metrics (optional) ----
+        train_auc, train_acc = None, None
+        if model.model_name == "dkt":
+            train_auc, train_acc = evaluate(model, train_loader, model.model_name)
+            print(f"            trainauc: {round(train_auc,4)}, trainacc: {round(train_acc,4)}")
+
+        # ---- Log metrics to Weights & Biases once per epoch ----
+        if wandb is not None and getattr(wandb, "run", None) is not None:
+            log_dict = {
+                "epoch": i,
+                "train_loss": float(loss_mean),
+                "valid_loss": float(valid_loss),
+                "validauc": float(auc),
+                "validacc": float(acc),
+                "best_auc": float(max_auc),
+                "best_epoch": int(best_epoch) if best_epoch != -1 else -1,
+            }
+
+            # Include DKT metrics if they exist
+            if train_auc is not None and train_acc is not None:
+                log_dict["trainauc"] = float(train_auc)
+                log_dict["trainacc"] = float(train_acc)
+
+            # Send to WandB with 'epoch' as the x-axis
+            wandb.log(log_dict, step=i)
+
 
         if auc > max_auc+1e-3:
             if save_model:
@@ -249,6 +305,6 @@ def train_model(model, train_loader, valid_loader, num_epochs, opt, ckpt_path, t
         print(f"            testauc: {round(testauc,4)}, testacc: {round(testacc,4)}, window_testauc: {round(window_testauc,4)}, window_testacc: {round(window_testacc,4)}")
 
 
-        if i - best_epoch >= 10:
+        if i - best_epoch >= 20:
             break
     return testauc, testacc, window_testauc, window_testacc, validauc, validacc, best_epoch

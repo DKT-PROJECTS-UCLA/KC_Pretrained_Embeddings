@@ -8,6 +8,9 @@
     "dkt": {
         "learning_rate": 1e-3,
         "emb_size": 200,
+        "proj_dim": 200,
+        "hidden_size": 200,
+        "num_layers": 1,
         "dropout": 0.1,
         "pretrain_emb_path": "" 
     },

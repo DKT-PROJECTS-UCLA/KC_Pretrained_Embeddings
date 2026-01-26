@@ -221,6 +221,7 @@ def _setup_cohere_client(api_key: str):
         import cohere
         client = cohere.Client(api_key)
         _provider_clients["cohere"] = client
+        print('hereerers')
         print("✅ Cohere client initialized")
         return True
     except ImportError:
@@ -282,10 +283,27 @@ def _get_embedding(text: str, *, model: str, provider: str) -> torch.Tensor:
         
     elif provider == "cohere":
         client = _provider_clients["cohere"]
-        resp = client.embed(texts=[text], model=model, input_type="classification",embedding_types=["float"])
-        vec = resp.embeddings[0]
+        resp = client.embed(
+            texts=[text],
+            model=model,
+            input_type="classification",     # or 'search_document'/'search_query' depending on your use
+            embedding_types=["float"]
+        )
+        # Newer SDKs return an object with type-specific attributes
+        if hasattr(resp, "embeddings") and hasattr(resp.embeddings, "float"):
+            vec = resp.embeddings.float[0]
+        # Older SDKs may return a simple list-of-lists
+        elif hasattr(resp, "embeddings") and isinstance(resp.embeddings, list):
+            vec = resp.embeddings[0]
+        else:
+            # Last-resort fallback if the SDK shape differs
+            try:
+                vec = resp["embeddings"]["float"][0]
+            except Exception as e:
+                raise TypeError(f"Unexpected Cohere embed() response shape: {type(resp)}") from e
+
         return torch.tensor(vec, dtype=torch.float32)
-        
+            
     elif provider == "bert":
         SentenceTransformer = _provider_clients["bert"]
         if model not in _provider_clients:

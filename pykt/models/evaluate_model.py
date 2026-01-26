@@ -45,6 +45,8 @@ def save_cur_predict_result(dres, q, r, d, t, m, sm, p):
     return "\n".join(results)
 
 def evaluate(model, test_loader, model_name, rel=None, save_path=""):
+    device = next(model.parameters()).device      # <<< ADD THIS LINE
+
     if save_path != "":
         fout = open(save_path, "w", encoding="utf8")
     with torch.no_grad():

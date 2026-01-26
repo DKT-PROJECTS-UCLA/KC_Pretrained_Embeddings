@@ -13,7 +13,14 @@ from pykt.datasets import init_dataset4train
 import datetime
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-device = "cpu" if not torch.cuda.is_available() else "cuda"
+# device = "cpu" if not torch.cuda.is_available() else "cuda"
+device = (
+    "mps" if torch.backends.mps.is_available()
+    else "cuda" if torch.cuda.is_available()
+    else "cpu"
+)
+print(f"Using device: {device}")
+
 os.environ['CUBLAS_WORKSPACE_CONFIG']=':4096:2'
 
 def save_config(train_config, model_config, data_config, params, save_dir):
@@ -29,6 +36,8 @@ def main(params):
     if params['use_wandb']==1:
         import wandb
         wandb.init()
+        wandb.define_metric("epoch")
+        wandb.define_metric("*", step="epoch")
 
     set_seed(params["seed"])
     model_name, dataset_name, fold, emb_type, save_dir = params["model_name"], params["dataset_name"], \
@@ -39,9 +48,9 @@ def main(params):
     with open("../configs/kt_config.json") as f:
         config = json.load(f)
         train_config = config["train_config"]
-        if model_name in ["dkvmn","deep_irt", "sakt", "saint","saint++", "akt","folibikt", "atkt", "lpkt", "skvmn", "dimkt"]:
+        if model_name in ["dkvmn","deep_irt", "sakt", "saint","saint++", "akt", "robustkt", "folibikt", "atkt", "lpkt", "skvmn", "dimkt"]:
             train_config["batch_size"] = 64 ## because of OOM
-        if model_name in ["simplekt", "bakt_time", "sparsekt"]:
+        if model_name in ["simplekt","stablekt", "bakt_time", "sparsekt"]:
             train_config["batch_size"] = 64 ## because of OOM
         if model_name in ["gkt"]:
             train_config["batch_size"] = 16 
@@ -67,13 +76,19 @@ def main(params):
 
     print("Start init data")
     print(dataset_name, model_name, data_config, fold, batch_size)
-    
-    debug_print(text="init_dataset",fuc_name="main")
+
+    debug_print(text="init_dataset", fuc_name="main")
     if model_name not in ["dimkt"]:
-        train_loader, valid_loader, *_ = init_dataset4train(dataset_name, model_name, data_config, fold, batch_size)
+        _tmp = init_dataset4train(dataset_name, model_name, data_config, fold, batch_size)
     else:
         diff_level = params["difficult_levels"]
-        train_loader, valid_loader, *_ = init_dataset4train(dataset_name, model_name, data_config, fold, batch_size, diff_level=diff_level)
+        _tmp = init_dataset4train(dataset_name, model_name, data_config, fold, batch_size, diff_level=diff_level)
+
+    train_loader, valid_loader = _tmp[:2]
+    test_loader = _tmp[2] if len(_tmp) > 2 else None
+
+    train_loader, valid_loader = _tmp[:2]
+    test_loader = _tmp[2] if len(_tmp) > 2 else None
 
     params_str = "_".join([str(v) for k,v in params.items() if not k in ['other_config']])
 
@@ -98,12 +113,14 @@ def main(params):
     for remove_item in ['use_wandb','learning_rate','add_uuid','l2']:
         if remove_item in model_config:
             del model_config[remove_item]
-    if model_name in ["saint","saint++", "sakt", "atdkt", "simplekt", "bakt_time","folibikt"]:
+    if model_name in ["saint","saint++", "sakt", "atdkt", "simplekt","stablekt", "bakt_time","folibikt"]:
         model_config["seq_len"] = seq_len
         
     debug_print(text = "init_model",fuc_name="main")
     print(f"model_name:{model_name}")
     model = init_model(model_name, model_config, data_config[dataset_name], emb_type)
+    model.to(torch.device(device))  # safety line
+
     print(f"model is {model}")
     if model_name == "hawkes":
         weight_p, bias_p = [], []
@@ -123,9 +140,18 @@ def main(params):
         opt = torch.optim.Adam(model.parameters(),lr=learning_rate,weight_decay=params['weight_decay'])
     else:
         if optimizer == "sgd":
-            opt = SGD(model.parameters(), learning_rate, momentum=0.9)
+            opt = SGD(
+                model.parameters(),
+                lr=learning_rate,
+                momentum=0.9,
+                weight_decay=params.get("l2", 0.0)
+            )
         elif optimizer == "adam":
-            opt = Adam(model.parameters(), learning_rate)
+            opt = Adam(
+                model.parameters(),
+                lr=learning_rate,
+                weight_decay=params.get("l2", 0.0)
+            )
    
     testauc, testacc = -1, -1
     window_testauc, window_testacc = -1, -1
@@ -140,11 +166,27 @@ def main(params):
             train_model(model, train_loader, valid_loader, num_epochs, opt, ckpt_path, None, None, save_model, data_config[dataset_name], fold)
     else:
         testauc, testacc, window_testauc, window_testacc, validauc, validacc, best_epoch = train_model(model, train_loader, valid_loader, num_epochs, opt, ckpt_path, None, None, save_model)
-    
     if save_model:
         best_model = init_model(model_name, model_config, data_config[dataset_name], emb_type)
         net = torch.load(os.path.join(ckpt_path, emb_type+"_model.ckpt"))
         best_model.load_state_dict(net)
+
+# # After best_model.load_state_dict(...)
+#     if len(_) > 0 and _[0] is not None:
+#         test_loader = _[0]
+#         testauc, testacc = evaluate(best_model, test_loader, model_name)
+#     else:
+#         testauc, testacc = None, None   # <- no test set available
+
+    # final metrics for the Runs table
+    if test_loader is not None:
+        print("[info] Using test_loader for final metrics")
+        testauc, testacc = evaluate(best_model, test_loader, model_name)
+    else:
+        print("[info] No test_loader; using valid_loader for final metrics")
+        testauc, testacc = evaluate(best_model, valid_loader, model_name)
+
+
 
     print("fold\tmodelname\tembtype\ttestauc\ttestacc\twindow_testauc\twindow_testacc\tvalidauc\tvalidacc\tbest_epoch")
     print(str(fold) + "\t" + model_name + "\t" + emb_type + "\t" + str(round(testauc, 4)) + "\t" + str(round(testacc, 4)) + "\t" + str(round(window_testauc, 4)) + "\t" + str(round(window_testacc, 4)) + "\t" + str(validauc) + "\t" + str(validacc) + "\t" + str(best_epoch))
@@ -152,5 +194,11 @@ def main(params):
     print(f"end:{datetime.datetime.now()}")
     
     if params['use_wandb']==1:
-        wandb.log({ 
-                    "validauc": validauc, "validacc": validacc, "best_epoch": best_epoch,"model_save_path":model_save_path})
+        wandb.log({
+            "testauc": testauc,
+            "testacc": testacc,
+            "validauc": validauc,
+            "validacc": validacc,
+            "best_epoch": best_epoch,
+            "model_save_path": model_save_path
+        })

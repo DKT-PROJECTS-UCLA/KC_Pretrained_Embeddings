@@ -1,6 +1,5 @@
-# ARCHIVE FILE
 program: wandb_dkt_train.py
-method: grid
+method: bayes
 metric:
   goal: maximize
   name: validauc
@@ -22,26 +21,33 @@ parameters:
     value: ../pretrained_Embedding/final_embeddings_assist2012_text_embedding_3_large/pipeline_1_final_dkt.pt
 
   # -------- Representation bottleneck (wider search) --------
+  # ---- no bottleneck ----
   proj_dim:
-    values: [64, 256]
+    values: [224, 240, 256]
 
-  # -------- LSTM capacity --------
   hidden_size:
-    values: [256,512, 640]
+    values: [128, 144]
 
   num_layers:
-    values: [1]
+    values: [1, 2]
 
-  # -------- Regularization (2017 needs LOTS) --------
+  use_semantic_output:
+    values: [true]
+
+  # regularization: now important because you’re unfreezing
   dropout:
-    values: [ 0.65, 0.75]
+    values: [0.30, 0.35, 0.40]
 
   l2:
-    values: [1e-6]
+    values: [0.0, 1e-5, 3e-5, 1e-4]
 
-  # -------- Optimization (expanded search) --------
+  # more cautious LR band around your current 5e-4
   learning_rate:
-    values: [5e-4]
+    values: [1e-4, 2e-4, 3e-4, 5e-4]
+
+
+
+
   seed:
     values: [42]
   fold:

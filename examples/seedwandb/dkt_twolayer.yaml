@@ -1,0 +1,49 @@
+method: bayes
+metric:
+  goal: maximize
+  name: validauc
+name: assist2017_dkt_semantic_biglstm_0
+
+parameters:
+  dataset_name:
+    values: ["assist2017"]
+
+  model_name:
+    values: ["dkt"]
+
+  emb_type:
+    values: ["qid"]
+
+  pretrained_emb_path:
+    value: ../pretrained_Embedding/final_embeddings_assist2017_text_embedding_3_small/pipeline_6_final_dkt.pt
+
+  # projection from 3k → lower dim
+  proj_dim:
+    values: [128, 256]
+
+  # NEW: bigger LSTM capacity
+  hidden_size:
+    values: [512, 768, 1024]
+
+  num_layers:
+    values: [1, 2]
+
+  dropout:
+    values: [0.3, 0.4, 0.5]
+
+  l2:
+    values: [1e-5, 3e-5, 1e-4]
+
+  learning_rate:
+    values: [0.0007, 0.0005, 0.0003]
+
+  fold:
+    values: [0]
+
+  seed:
+    values: [42]
+
+  save_dir:
+    values: ["models/dkt_semantic_biglstm_assist2017"]
+
+program: wandb_dkt_train.py

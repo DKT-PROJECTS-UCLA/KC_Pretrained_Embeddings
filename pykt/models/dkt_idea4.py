@@ -26,8 +26,7 @@ class DKT(Module):
             if pretrained_emb_path.endswith('.pt'):
                 emb_w = torch.load(pretrained_emb_path)
                 self.emb_size = emb_w.shape[-1]
-                self.interaction_emb = Embedding.from_pretrained(emb_w, freeze=False)
-                # self.interaction_emb = Embedding.from_pretrained(emb_w, freeze=True)
+                self.interaction_emb = Embedding.from_pretrained(emb_w, freeze=True)
                 pretrained_loaded = True
                 pretrained_weight = emb_w
             else:
@@ -68,11 +67,7 @@ class DKT(Module):
         h = self.dropout_layer(h)
         if self.use_semantic_output:
             proj_h = self.semantic_output_layer(h)
-            proj_questions = self.projected_question_embeddings
-            if proj_questions.device != proj_h.device:
-                proj_questions = proj_questions.to(proj_h.device)
-                self.projected_question_embeddings = proj_questions
-            logits = torch.einsum("btd,qd->btq", proj_h, proj_questions)
+            logits = torch.einsum("btd,qd->btq", proj_h, self.projected_question_embeddings)
         else:
             logits = self.out_layer(h)
         y = torch.sigmoid(logits)
@@ -80,15 +75,10 @@ class DKT(Module):
         return y
 
     def _build_semantic_output_head(self, pretrained_weight):
-        correct = pretrained_weight[:self.num_c]
-        incorrect = pretrained_weight[self.num_c:self.num_c * 2]
-        question_embeddings = correct
-
-        # Project into the same space as input projection
-        projected_questions = self.projection_layer(question_embeddings).detach()
-
-        # Store as frozen buffer
+        incorrect = pretrained_weight[:self.num_c]
+        correct = pretrained_weight[self.num_c:self.num_c * 2]
+        question_embeddings = (incorrect + correct) / 2.0
+        with torch.no_grad():
+            projected_questions = self.projection_layer(question_embeddings).detach()
         self.projected_question_embeddings = projected_questions
-
-        # Map hidden -> proj_dim for semantic logits
-        self.semantic_output_layer = Linear(self.hidden_size, self.proj_dim, bias=False)
+        self.semantic_output_layer = Linear(self.hidden_size, self.proj_dim)
