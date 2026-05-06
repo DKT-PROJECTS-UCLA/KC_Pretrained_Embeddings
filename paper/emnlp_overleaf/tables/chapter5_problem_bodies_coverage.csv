@@ -1,0 +1,4 @@
+dataset,questions_total,questions_problem_bodies,kcs_total,kcs_problem_bodies,embedding_model,prototype_method,metric,value,unit_of_analysis,n,source_artifact_path
+assist2009,26688,7836,123,76,,,problem_bodies_coverage,0.293615107913669,dataset,26688,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2012,179999,32792,265,162,,,problem_bodies_coverage,0.182178789882166,dataset,179999,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2017,3162,638,102,68,,,problem_bodies_coverage,0.2017710309930424,dataset,3162,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex

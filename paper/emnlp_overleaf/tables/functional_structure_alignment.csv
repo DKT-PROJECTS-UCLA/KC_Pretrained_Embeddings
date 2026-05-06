@@ -1,0 +1,13 @@
+dataset,embedding_model,pipeline,prototype_method,functional_graph,metric,value,unit_of_analysis,n,source_artifact_path
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,transition,spearman,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,transition,kendall,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,transition,auroc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,transition,auprc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,cooccurrence,spearman,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,cooccurrence,kendall,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,cooccurrence,auroc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,cooccurrence,auprc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,difficulty_similarity,spearman,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,difficulty_similarity,kendall,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,difficulty_similarity,auroc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,difficulty_similarity,auprc_top_edges,,kc_pair,2145,outputs/emnlp/graphs/functional_graphs

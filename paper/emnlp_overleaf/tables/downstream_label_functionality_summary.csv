@@ -1,0 +1,10 @@
+functionality,metric,result,interpretation,source_table
+functional_graph_alignment,mean_spearman,0.063,"Prototype geometry weakly matches KT transition, co-occurrence, difficulty, and DKT-style graphs.",outputs/emnlp/tables/functional_structure_alignment.csv
+difficulty_prediction,mean_r2,-0.208,"Representations do not reliably encode item difficulty across datasets.",outputs/emnlp/tables/difficulty_prediction_summary.csv
+difficulty_prediction,mean_spearman,0.216,"Difficulty rank signal is positive but modest.",outputs/emnlp/tables/difficulty_prediction_summary.csv
+transition_prediction,mean_auroc,0.989,"Representation-derived features separate observed from unobserved transitions.",outputs/emnlp/tables/transition_prediction_summary.csv
+transition_prediction,mean_auprc,0.836,"Transition discrimination is strong under binary edge classification.",outputs/emnlp/tables/transition_prediction_summary.csv
+transition_prediction,mean_recall_at_10,0.124,"Exact transition-edge ranking remains modest.",outputs/emnlp/tables/transition_prediction_summary.csv
+dkt_initialization,full_data_auc_gain,none,"No semantic/category initialization variant exceeds baseline test AUC in the combined Chapter 5 full-data comparison.",outputs/emnlp/tables/chapter5_baseline_vs_category_init.csv
+dkt_initialization,reduced_data_delta_auc,"2009 +0.0004; 2012 +0.0002; 2017 +0.0096","Low-data gains are mixed and dataset-dependent.",outputs/emnlp/tables/chapter5_data_efficiency_summary.csv
+dkt_initialization,posthoc_best_pearson,"2009 0.0573; 2012 0.0894; 2017 0.0247","Semantic KC graphs align weakly with DKT-derived KC graphs.",outputs/emnlp/tables/chapter5_posthoc_graph_alignment.csv

@@ -1,0 +1,4 @@
+dataset,mean_delta_auc,mean_delta_accuracy,positive_auc_splits,best_split,best_pipeline,worst_split,embedding_model,prototype_method,metric,value,unit_of_analysis,n,source_artifact_path
+assist2009,0.0004,0.0,5/9,40%,P4,20%,mixed,chapter5_pipeline,mean_delta_auc,0.0004,sample_split,9,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2012,0.0002,-0.0028,6/9,80%,P3,40%,mixed,chapter5_pipeline,mean_delta_auc,0.0002,sample_split,9,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2017,0.0096,0.002,8/9,30%,P3,20%,mixed,chapter5_pipeline,mean_delta_auc,0.0096,sample_split,9,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
