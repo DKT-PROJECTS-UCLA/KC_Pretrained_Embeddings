@@ -1,0 +1,4 @@
+dataset,embedding_model,pipeline,pearson,spearman,top10pct_overlap,prototype_method,metric,value,unit_of_analysis,n,source_artifact_path
+assist2009,bert_ft_assist2009,P5,0.0573,0.0276,0.1151,chapter5_pipeline,pearson,0.0573,kc_pair,,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2012,embed_english_v3.0,P3,0.0894,0.0782,0.1571,chapter5_pipeline,pearson,0.0894,kc_pair,,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2017,all_MiniLM_L6_v2,P5,0.0247,0.0114,0.1404,chapter5_pipeline,pearson,0.0247,kc_pair,,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex

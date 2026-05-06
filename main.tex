@@ -1,0 +1,36 @@
+\documentclass[11pt]{article}
+\usepackage[review]{acl}
+\usepackage{times}
+\usepackage{latexsym}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{microtype}
+\usepackage{inconsolata}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{url}
+\usepackage{multirow}
+
+\title{When Do Member-Derived Embeddings Represent Labels? Evidence from Educational Knowledge Components}
+
+\author{Anonymous EMNLP Submission}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+NLP systems often represent labels or categories by embedding their names, descriptions, or member examples. We study a focused variant: representing a category by aggregating embeddings of the instances assigned to it. Educational Knowledge Components (KCs) provide a useful test case because each KC is a human-defined label over many question texts, but also acts as a functional state variable in knowledge tracing. Across ASSISTments datasets, member-derived KC prototypes recover substantial category signal: mean-prototype Recall@1 is 0.833, compared with 0.017 under shuffled prototypes, and heuristic label alignment reaches mean NMI 0.570. However, downstream functionality is mixed or weak. Prototype graphs align weakly with KT functional graphs, difficulty prediction has negative mean $R^2$, and Chapter 5 DKT initialization does not reliably improve over learned interaction embeddings. Transition prediction is the main positive diagnostic, but it does not rescue the stronger DKT result. We argue that member-derived label representations require downstream validation: recovering label membership is not sufficient evidence that an embedding is a useful functional prior.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_data}
+\input{sections/04_methods}
+\input{sections/05_results}
+\input{sections/06_discussion}
+\input{sections/07_limitations}
+\input{sections/08_conclusion}
+
+\bibliography{references}
+
+\end{document}

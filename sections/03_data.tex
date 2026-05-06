@@ -1,0 +1,22 @@
+\section{Data}
+We use ASSISTments 2009, 2012, and 2017. Each dataset contains student interaction sequences and human-authored KC labels. We combine these with question--KC mapping files, Problem Bodies question text, and existing question-embedding artifacts in the repository. The embedding set includes sentence-transformer variants and available fine-tuned BERT embeddings; all analyses reuse existing artifacts rather than retraining KT models.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Dataset & Qs & Text Qs & KCs & Text KCs \\
+\midrule
+2009 & 26,688 & 7,836 & 123 & 76 \\
+2012 & 179,999 & 32,792 & 265 & 162 \\
+2017 & 3,162 & 638 & 102 & 68 \\
+\bottomrule
+\end{tabular}
+\caption{Problem Bodies text coverage used by Chapter 5. Text linkage is incomplete, so member-derived label representations are available only for the text-linked subset.}
+\label{tab:coverage}
+\end{table}
+
+Text linkage is a central constraint. Table~\ref{tab:coverage} shows that only 18--29\% of questions have the text linkage needed for the Chapter 5 initialization setting, although the linked KCs cover a larger share of the KC inventory. This matters for interpretation: our category-representation analyses test the subset where member question text is available, not every interaction in the KT benchmarks.
+
+We report all generated metrics with dataset, embedding model, prototype method, metric name, unit of analysis, sample size, and source artifact path. When exact recomputation from raw artifacts is not possible, we mark values as thesis-text anchors from Chapter 5 rather than treating them as newly estimated results.

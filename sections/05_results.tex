@@ -1,0 +1,81 @@
+\section{Results}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/fig2_prototype_retrieval.pdf}
+\caption{Question-to-KC retrieval from member-derived prototypes. Prototypes recover category membership far above shuffled controls, showing that the representations contain real label information.}
+\label{fig:retrieval}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Analysis & Metric & Mean \\
+\midrule
+Retrieval & Recall@1 & 0.625 \\
+Mean prototypes & Recall@1 & 0.833 \\
+Shuffled control & Recall@1 & 0.017 \\
+Retrieval & MRR & 0.707 \\
+KC coherence & Intra--inter margin & 0.356 \\
+Label alignment & NMI & 0.570 \\
+Functional alignment & Spearman & 0.063 \\
+Difficulty prediction & $R^2$ & -0.208 \\
+Transition prediction & AUROC & 0.989 \\
+Transition ranking & Recall@10 & 0.124 \\
+\bottomrule
+\end{tabular}
+\caption{Summary of category and functional diagnostics. Retrieval and label-alignment metrics show category signal, but functional graph alignment is weak.}
+\label{tab:diagnostics}
+\end{table}
+
+\paragraph{Member-derived prototypes recover KC membership.}
+Figure~\ref{fig:retrieval} and Table~\ref{tab:diagnostics} show strong category recovery. Across prototype variants, Recall@1 averages 0.625, while shuffled prototypes average 0.017. Mean prototypes are stronger, with Recall@1 of 0.833 across 35 rows. MRR averages 0.707. These results support the first part of the story: aggregating member-question embeddings creates a meaningful representation of the human KC label.
+
+\paragraph{The category signal is partial and heterogeneous.}
+KC coherence is positive on average, with an intra-minus-inter cosine margin of 0.356 across 2,925 KC-level rows. However, the spread across KCs is important. Some KCs are compact text categories, while others combine heterogeneous problem forms under a single educational label. Heuristic label alignment is also partial: NMI averages 0.570 across 35 rows, but the label source is derived from KC names rather than a complete curriculum taxonomy. Thus the prototypes encode meaningful category information, but not a clean universal taxonomy.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{0.26\linewidth}p{0.20\linewidth}p{0.42\linewidth}}
+\toprule
+Functionality & Result & Interpretation \\
+\midrule
+Functional graph alignment & $\rho=0.063$ & Prototype geometry weakly matches KT transition, co-occurrence, difficulty, and DKT-style graphs. \\
+Difficulty prediction & $R^2=-0.208$ & Representations do not reliably encode item difficulty across datasets. \\
+Transition prediction & AUROC $=0.989$; R@10 $=0.124$ & Representations/features can separate observed from unobserved transitions, but ranking exact next-KC edges remains modest. \\
+DKT initialization & no full-data AUC gains & The strongest downstream test remains negative or mixed. \\
+\bottomrule
+\end{tabular}
+\caption{Downstream functionality tests for member-derived KC label representations. The non-DKT diagnostics add nuance, but the main functional-prior claim is constrained by the DKT result.}
+\label{tab:functionalities}
+\end{table}
+
+\paragraph{Other downstream functionalities are mixed.}
+Table~\ref{tab:functionalities} expands the downstream evidence beyond DKT. The strongest contrast is between category recovery and functional alignment. Prototype geometry aligns only weakly with KT-relevant graph structure: mean Spearman correlation is 0.063 over 80 non-missing rows in the functional-structure table. By graph type, transition and co-occurrence alignments are positive but small (0.189 and 0.232), existing KC-graph alignment is near zero (0.048), and difficulty-similarity alignment is negative (-0.225). This suggests that category prototypes do not recover a stable functional relation over KCs.
+
+Difficulty prediction is also weak in this run. Across 92 rows, mean $R^2=-0.208$, with ASSISTments 2012 below zero on average (-0.403) and ASSISTments 2017 near zero (0.004). Rank correlations are positive but modest: mean Spearman is 0.216 overall, 0.154 for 2012, and 0.283 for 2017. Thus the representations contain some difficulty-related signal, but not enough for reliable predictive functionality.
+
+Transition prediction is the most positive non-DKT diagnostic. AUROC averages 0.989 and AUPRC averages 0.836, indicating that representation-derived features separate observed from unobserved transitions. However, ranking exact outgoing edges is much weaker: Recall@1 is 0.012 and Recall@10 is 0.124. We therefore treat transition prediction as evidence that the representations encode some sequential structure, not as evidence that they provide a complete functional KT prior.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Dataset & Low-data $\Delta$AUC & BERT $\Delta$AUC & Best graph $r$ \\
+\midrule
+2009 & +0.0004 & +0.0029 & 0.0573 \\
+2012 & +0.0002 & +0.0001 & 0.0894 \\
+2017 & +0.0096 & -- & 0.0247 \\
+\bottomrule
+\end{tabular}
+\caption{Chapter 5 DKT anchors. Reduced-data and fine-tuned BERT gains are small or inconsistent, and post hoc alignment between semantic KC graphs and DKT-derived KC graphs is weak.}
+\label{tab:ch5}
+\end{table}
+
+\paragraph{DKT remains the main negative downstream result.}
+Table~\ref{tab:ch5} summarizes the Chapter 5 evidence most relevant to this paper. In the full-data benchmark, no semantic/category initialization variant exceeds baseline test AUC on any dataset in the combined thesis comparison. Reduced-data results are mixed: mean $\Delta$AUC is +0.0004 for 2009, +0.0002 for 2012, and +0.0096 for 2017. Fine-tuned BERT makes initialization more competitive but produces only small gains, +0.0029 on 2009 and +0.0001 on 2012. The post hoc graph analysis points in the same direction: best Pearson correlations between semantic KC graphs and DKT-derived KC graphs are 0.0573, 0.0894, and 0.0247.
+
+Taken together, the downstream functionality results sharpen the interpretation of Chapter 5. The representations are not functionally empty: transition diagnostics are strong under binary discrimination, and difficulty correlations are sometimes positive. But these signals are partial. They do not produce robust graph alignment, reliable difficulty prediction, or better DKT initialization. The downstream result is therefore not that text embeddings contain no information. It is that member-derived semantic/category representations are not reliable all-purpose functional representations of KCs.

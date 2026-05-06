@@ -1,0 +1,13 @@
+dataset,embedding_model,pipeline,prototype_method,metric,value,unit_of_analysis,n,source_artifact_path
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,auroc,0.9855192956860052,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,auprc,0.7312032777289027,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,spearman_weight,0.1099905853120727,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,recall_at_1,0.0104166666666666,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,recall_at_3,0.03125,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,recall_at_5,0.0520833333333333,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L12_v2,pipeline_1_original,mean,recall_at_10,0.1041666666666666,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L6_v2,pipeline_1_original,mean,auroc,0.9851187921959034,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L6_v2,pipeline_1_original,mean,auprc,0.7314060040930053,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L6_v2,pipeline_1_original,mean,spearman_weight,0.100121524988967,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L6_v2,pipeline_1_original,mean,recall_at_1,0.0104166666666666,kc_pair,19740,data/* train/test interactions
+assist2012,all_MiniLM_L6_v2,pipeline_1_original,mean,recall_at_3,0.03125,kc_pair,19740,data/* train/test interactions

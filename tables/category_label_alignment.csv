@@ -1,0 +1,13 @@
+dataset,embedding_model,pipeline,prototype_method,metric,value,unit_of_analysis,n,label_source,source_artifact_path
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,ari,0.1076066790352504,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,nmi,0.6511802668487979,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,homogeneity,0.5106139749680811,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,completeness,0.8985375660302145,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L12_v2,pipeline_1_original,mean,cluster_purity,0.3181818181818182,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L6_v2,pipeline_1_original,mean,ari,0.1327403352719808,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L6_v2,pipeline_1_original,mean,nmi,0.6710547301175056,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L6_v2,pipeline_1_original,mean,homogeneity,0.5287796721196879,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L6_v2,pipeline_1_original,mean,completeness,0.9180746806143286,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_MiniLM_L6_v2,pipeline_1_original,mean,cluster_purity,0.3333333333333333,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_mpnet_base_v2,pipeline_1_original,mean,ari,0.0693557077977061,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv
+assist2009,all_mpnet_base_v2,pipeline_1_original,mean,nmi,0.6414269144424393,kc,66,heuristic_from_kc_name,outputs/emnlp/prototypes/prototype_metadata.csv

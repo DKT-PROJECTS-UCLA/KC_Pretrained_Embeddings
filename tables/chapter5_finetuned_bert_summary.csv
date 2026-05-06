@@ -1,0 +1,5 @@
+dataset,condition,pipeline,test_auc,delta_auc,test_accuracy,delta_accuracy,embedding_model,prototype_method,metric,value,unit_of_analysis,n,source_artifact_path
+assist2009,matched_baseline,,0.8552,,0.7875,,bert_ft,chapter5_pipeline,test_auc,0.8552,validation_selected_run,1,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2009,fine_tuned_bert,P4,0.8581,0.0029,0.7875,0.0,bert_ft,chapter5_pipeline,test_auc,0.8581,validation_selected_run,1,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2012,matched_baseline,,0.7363,,0.7384,,bert_ft,chapter5_pipeline,test_auc,0.7363,validation_selected_run,1,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
+assist2012,fine_tuned_bert,P4,0.7364,0.0001,0.7371,-0.0013,bert_ft,chapter5_pipeline,test_auc,0.7364,validation_selected_run,1,/Users/kiakarbasi/thesis/Thesis/chapter_text_informed_initialization.tex
