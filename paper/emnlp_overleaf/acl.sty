@@ -1,0 +1,36 @@
+% Local fallback ACL style shim.
+%
+% This file exists only so the standalone Overleaf draft can compile when it
+% was not created from the official ACL/EMNLP template. For final submission,
+% replace this file with the official acl.sty from the current ACL/EMNLP
+% author kit and use the official bibliography style.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{acl}[2026/05/06 local fallback ACL style shim]
+
+\newif\ifacl@review
+\newif\ifacl@final
+\DeclareOption{review}{\acl@reviewtrue}
+\DeclareOption{final}{\acl@finaltrue}
+\DeclareOption*{\relax}
+\ProcessOptions\relax
+
+\RequirePackage[margin=1in]{geometry}
+\RequirePackage{natbib}
+\RequirePackage{abstract}
+
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\columnsep}{0.25in}
+
+\renewcommand{\abstractname}{Abstract}
+\renewenvironment{abstract}
+  {\begin{center}\bfseries\abstractname\end{center}\begin{quote}\small}
+  {\end{quote}}
+
+\AtBeginDocument{%
+  \ifacl@review
+    \date{}
+  \fi
+}
+
